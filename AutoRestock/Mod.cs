@@ -4,15 +4,15 @@ using Il2CppScheduleOne.NPCs;
 using MelonLoader;
 using System.Reflection;
 
-[assembly: MelonInfo(typeof(Reshelves2.Reshelves2Mod), "Reshelves2", "1.0.0", "lasersquid", null)]
+[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.0", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
-namespace Reshelves2
+namespace AutoRestock
 {
-    public class Reshelves2Mod : MelonMod
+    public class AutoRestockMod : MelonMod
     {
         public MelonPreferences_Category melonPrefs;
-        public HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("com.lasersquid.reshelves2");
+        public HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("com.lasersquid.autorestock");
 
         public override void OnInitializeMelon()
         {
@@ -29,8 +29,8 @@ namespace Reshelves2
 
         private void CreateMelonPreferences()
         {
-            melonPrefs = MelonPreferences.CreateCategory("Reshelves2");
-            melonPrefs.SetFilePath("UserData/Reshelves2.cfg", true, false);
+            melonPrefs = MelonPreferences.CreateCategory("AutoRestock");
+            melonPrefs.SetFilePath("UserData/AutoRestock.cfg", true, false);
 
             melonPrefs.CreateEntry<float>("itemDiscount", 0f, "Restock discount", "Discount applied to restock price (0.2 = 20% off)");
             melonPrefs.CreateEntry<bool>("payWithCash", true, "Pay for restock with cash", "True to pay with cash, false to pay with bank account");

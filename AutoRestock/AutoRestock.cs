@@ -5,20 +5,6 @@ using UnityEngine;
 using UnityEngine.Events;
 using System.Reflection;
 using Newtonsoft.Json;
-using Il2CppScheduleOne.UI.Phone.Delivery;
-using System.Linq.Expressions;
-using Il2CppScheduleOne.Tiles;
-using Il2CppScheduleOne.Property;
-using Il2CppScheduleOne.PlayerScripts;
-using Il2CppScheduleOne;
-using Il2CppScheduleOne.UI;
-
-
-
-
-
-
-
 
 #if MONO_BUILD
 using FishNet;
@@ -42,7 +28,6 @@ using Il2CppFishNet;
 using Il2CppScheduleOne.Messaging;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.ObjectScripts;
-using Il2CppScheduleOne.Packaging;
 using Il2CppScheduleOne.Storage;
 using Il2CppScheduleOne.StationFramework;
 using Il2CppFishNet.Object;
@@ -56,17 +41,19 @@ using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.NPCs.Behaviour;
 using Il2CppScheduleOne.Management;
 using Il2CppScheduleOne.Persistence;
+using Il2CppScheduleOne.Property;
+using Il2CppScheduleOne.UI;
 #endif
 
-namespace Reshelves2
+namespace AutoRestock
 {
     public class Sched1PatchesBase
     {
-        protected static Reshelves2Mod Mod;
+        protected static AutoRestockMod Mod;
 
 
 
-        public static void SetMod(Reshelves2Mod mod)
+        public static void SetMod(AutoRestockMod mod)
         {
             Mod = mod;
         }
@@ -79,7 +66,7 @@ namespace Reshelves2
 
     public static class Utils
     {
-        public static Reshelves2Mod Mod;
+        public static AutoRestockMod Mod;
         public static void PrintException(Exception e)
         {
             Utils.Warn($"Exception: {e.GetType().Name} - {e.Message}");
@@ -254,22 +241,8 @@ namespace Reshelves2
         {
             List<string> shelves = ["Safe", "Small Storage Rack", "Medium Storage Rack", "Large Storage Rack", "StorageRack"];
             return shelves.Aggregate<string, bool>(false, (bool accum, string name) => accum || objName.Contains(name));
-
         }
-
     }
-
-    // manager object:
-    //      - tryreshelving
-    //      - ledger
-    //      - ondaypass: display receipt
-    //      - displayReceipt
-    // patches:
-    //      - mixing station
-    //      - packaging station
-    //      - chemistry station
-    //      - cauldron
-    //      - shelves (storageEntity)
 
     public static class Manager
     {
@@ -432,7 +405,7 @@ namespace Reshelves2
                 return;
             }
 
-            melonPrefs = MelonPreferences.GetCategory("Reshelves2");
+            melonPrefs = MelonPreferences.GetCategory("AutoRestock");
             timeManager = NetworkSingleton<TimeManager>.Instance;
             moneyManager = NetworkSingleton<MoneyManager>.Instance;
             saveManager = SaveManager.Instance;
@@ -464,7 +437,7 @@ namespace Reshelves2
             List<Transaction> pendingTransactions = JsonConvert.DeserializeObject<List<Transaction>>(melonPrefs.GetEntry<string>(transactionString).Value);
             
             isInitialized = true;
-            Utils.Log($"Reshelves2 manager initialized.");
+            Utils.Log($"AutoRestock manager initialized.");
 
             if (pendingTransactions.Count > 0)
             {
@@ -576,7 +549,6 @@ namespace Reshelves2
             }
         }
 
-        // TODO: does this even work??
         public static bool OwnedByNPC(ItemSlot slot)
         {
             if (isInitialized)
@@ -668,7 +640,7 @@ namespace Reshelves2
         {
             if (Manager.isInitialized)
             {
-                MelonPreferences_Category prefs = MelonPreferences.GetCategory("Reshelves2");
+                MelonPreferences_Category prefs = MelonPreferences.GetCategory("AutoRestock");
                 string todaysLedger = $"{GetSaveString()}_ledger";
                 if (prefs.HasEntry(todaysLedger))
                 {
@@ -762,7 +734,7 @@ namespace Reshelves2
             }
             else
             {
-                return "Reshelves2 not initialized!";
+                return "AutoRestock not initialized!";
             }
         }
     }
@@ -775,7 +747,7 @@ namespace Reshelves2
         // maybe playercamera.setcanlook? nope, not called either
         // playercamera.lockmouse? nope
         // gameinput.start? nope
-        // loadingscreen.close?
+        // loadingscreen.close? ding ding ding
 
 
         [HarmonyPatch(typeof(LoadingScreen), "Close")]

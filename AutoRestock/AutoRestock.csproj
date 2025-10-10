@@ -1,6 +1,6 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<ProjName>Reshelves2</ProjName>
+		<ProjName>AutoRestock</ProjName>
 		<Version>1.0.0</Version>
 		<GameDir>C:\Program Files (x86)\Steam\steamapps\common\Schedule I</GameDir>
 		<GamePath>$(GameDir)\Schedule I.exe</GamePath>
@@ -131,7 +131,7 @@
 
 	<ItemGroup>
 		<Compile Include="Mod.cs" />
-		<Compile Include="Reshelves2.cs" />
+		<Compile Include="AutoRestock.cs" />
 	</ItemGroup>
 
 	<ItemGroup>
