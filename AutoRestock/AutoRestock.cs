@@ -6,48 +6,43 @@ using UnityEngine.Events;
 using System.Reflection;
 using Newtonsoft.Json;
 
-
-
-
 #if MONO_BUILD
-using FishNet;
-using ScheduleOne.Messaging;
-using ScheduleOne.GameTime;
-using ScheduleOne.ObjectScripts;
-using ScheduleOne.Packaging;
-using ScheduleOne.Storage;
-using ScheduleOne.StationFramework;
 using FishNet.Object;
+using FishNet;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.EntityFramework;
+using ScheduleOne.GameTime;
 using ScheduleOne.ItemFramework;
-using ScheduleOne.Money;
-using ScheduleOne.NPCs;
-using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.Management;
+using ScheduleOne.Messaging;
+using ScheduleOne.Money;
+using ScheduleOne.NPCs.Behaviour;
+using ScheduleOne.NPCs;
+using ScheduleOne.ObjectScripts;
 using ScheduleOne.Persistence;
-using ScheduleOne.Persistence.Datas;
-using ScheduleOne.Properties;
+using ScheduleOne.Property;
+using ScheduleOne.StationFramework;
+using ScheduleOne.Storage;
 using ScheduleOne.UI;
 #else
-using Il2CppFishNet;
-using Il2CppScheduleOne.Messaging;
-using Il2CppScheduleOne.GameTime;
-using Il2CppScheduleOne.ObjectScripts;
-using Il2CppScheduleOne.Storage;
-using Il2CppScheduleOne.StationFramework;
 using Il2CppFishNet.Object;
-using Il2CppInterop.Runtime;
+using Il2CppFishNet;
 using Il2CppInterop.Runtime.InteropTypes;
+using Il2CppInterop.Runtime;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.EntityFramework;
+using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.ItemFramework;
-using Il2CppScheduleOne.Money;
-using Il2CppScheduleOne.NPCs;
-using Il2CppScheduleOne.NPCs.Behaviour;
 using Il2CppScheduleOne.Management;
+using Il2CppScheduleOne.Messaging;
+using Il2CppScheduleOne.Money;
+using Il2CppScheduleOne.NPCs.Behaviour;
+using Il2CppScheduleOne.NPCs;
+using Il2CppScheduleOne.ObjectScripts;
 using Il2CppScheduleOne.Persistence;
 using Il2CppScheduleOne.Property;
+using Il2CppScheduleOne.StationFramework;
+using Il2CppScheduleOne.Storage;
 using Il2CppScheduleOne.UI;
 #endif
 
@@ -57,22 +52,21 @@ namespace AutoRestock
     {
         protected static AutoRestockMod Mod;
 
+        public static void SetMod(AutoRestockMod mod)
+        {
+            Mod = mod;
+        }
+    }
 
+    public static class Utils
+    {
+        private static AutoRestockMod Mod;
 
         public static void SetMod(AutoRestockMod mod)
         {
             Mod = mod;
         }
 
-        public static void RestoreDefaults()
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-    public static class Utils
-    {
-        public static AutoRestockMod Mod;
         public static void PrintException(Exception e)
         {
             Utils.Warn($"Exception: {e.GetType().Name} - {e.Message}");
@@ -119,6 +113,7 @@ namespace AutoRestock
             AccessTools.Property(type, fieldName).SetValue(target, value);
 #endif
         }
+
         public static object GetProperty(Type type, string fieldName, object target)
         {
             return AccessTools.Property(type, fieldName).GetValue(target);
@@ -133,7 +128,6 @@ namespace AutoRestock
         {
             return AccessTools.Method(type, methodName).Invoke(target, args);
         }
-
 
         public static T CastTo<T>(object o) where T : class
         {
@@ -226,9 +220,9 @@ namespace AutoRestock
             {
                 qualityItemID = itemID;
             }
-
             return new QualityItemInstance(GetItemDef(qualityItemID), 1, quality);
         }
+
         public static bool IsObjectStorageRack(IItemSlotOwner slotOwner)
         {
 #if MONO_BUILD
@@ -264,21 +258,6 @@ namespace AutoRestock
             List<string> shelves = ["Safe", "Small Storage Rack", "Medium Storage Rack", "Large Storage Rack", "StorageRack"];
             return shelves.Aggregate<string, bool>(false, (bool accum, string name) => accum || objName.Contains(name));
         }
-
-#if !MONO_BUILD
-        public static bool IsObjectBuildableItem(IntPtr pointer)
-        {
-            string objName = new UnityEngine.Object(pointer).name;
-            return IsObjectBuildableItem(objName);
-        }
-
-        public static bool IsObjectStorageRack(IntPtr pointer)
-        {
-            string objName = new UnityEngine.Object(pointer).name;
-            return IsObjectStorageRack(objName);
-        }
-#endif
-
     }
 
     public static class Manager
@@ -404,13 +383,11 @@ namespace AutoRestock
         {
             try
             {
-                List<Property> properties = UnityEngine.Object.FindObjectsOfType<Property>().ToList<Property>();
-                List<GridItem> gridItems = UnityEngine.Object.FindObjectsOfType<GridItem>().ToList<GridItem>();
-
+                List<Property> properties = UnityEngine.Object.FindObjectsOfType<Property>().ToList();
+                List<GridItem> gridItems = UnityEngine.Object.FindObjectsOfType<GridItem>().ToList();
                 Property property = properties.FirstOrDefault<Property>((Property p) => p.name == identifier.property);
                 List<GridItem> gridItemsOnProperty = gridItems.FindAll((GridItem g) => g.ParentProperty == property);
                 GridItem gridItem = gridItemsOnProperty.Single<GridItem>((GridItem g) => g.OriginCoordinate == new Vector2(identifier.gridLocation[0], identifier.gridLocation[1]));
-
 #if MONO_BUILD
                 Component slotOwner = gridItem.gameObject.GetComponent(StringToType(identifier.type));
                 return ((IItemSlotOwner)slotOwner).ItemSlots[identifier.slotIndex];
@@ -456,44 +433,58 @@ namespace AutoRestock
                 return;
             }
 
-            melonPrefs = MelonPreferences.GetCategory("AutoRestock");
-            timeManager = NetworkSingleton<TimeManager>.Instance;
-            moneyManager = NetworkSingleton<MoneyManager>.Instance;
-            saveManager = SaveManager.Instance;
-
-            ledgerDay = timeManager.CurrentDay;
-
-            shelfAccessors = new Dictionary<ItemSlot, NPC>();
-            coroutines = new Dictionary<Transaction, object>();
-
-            lockOwner = UnityEngine.Object.FindObjectsOfType<NPC>().FirstOrDefault((NPC npc) => npc.ID == "oscar_holland");
-            exclusiveLock = new Mutex();
-
-            timeManager.onDayPass += new Action(Manager.OnDayPass);
-            saveManager.onSaveStart.AddListener(Utils.ToUnityAction(Manager.OnSaveStart));
-
-            ledgerString = $"{GetSaveString()}_ledger";
-            transactionString = $"{GetSaveString()}_inprogress";
-
-            if (!melonPrefs.HasEntry(ledgerString))
+            try
             {
-                melonPrefs.CreateEntry<string>(ledgerString, "[]", "", true);
+                melonPrefs = MelonPreferences.GetCategory("AutoRestock");
+                timeManager = NetworkSingleton<TimeManager>.Instance;
+                moneyManager = NetworkSingleton<MoneyManager>.Instance;
+                saveManager = SaveManager.Instance;
+
+                ledgerDay = timeManager.CurrentDay;
+
+                shelfAccessors = new Dictionary<ItemSlot, NPC>();
+                coroutines = new Dictionary<Transaction, object>();
+
+                lockOwner = UnityEngine.Object.FindObjectsOfType<NPC>().FirstOrDefault((NPC npc) => npc.ID == "oscar_holland");
+                exclusiveLock = new Mutex();
+
+                timeManager.onDayPass += new Action(Manager.OnDayPass);
+                saveManager.onSaveStart.AddListener(Utils.ToUnityAction(Manager.OnSaveStart));
+
+                ledgerString = $"{GetSaveString()}_ledger";
+                transactionString = $"{GetSaveString()}_inprogress";
+
+                if (!melonPrefs.HasEntry(ledgerString))
+                {
+                    melonPrefs.CreateEntry<string>(ledgerString, "[]", "", true);
+                }
+                if (!melonPrefs.HasEntry(transactionString))
+                {
+                    melonPrefs.CreateEntry<string>(transactionString, "[]", "", true);
+                }
+                melonPrefs.LoadFromFile(false);
+                ledger = JsonConvert.DeserializeObject<List<Transaction>>(melonPrefs.GetEntry<string>(ledgerString).Value);
+
+                isInitialized = true;
+                Utils.Log($"AutoRestock manager initialized.");
             }
-            if (!melonPrefs.HasEntry(transactionString))
+            catch (Exception e)
             {
-                melonPrefs.CreateEntry<string>(transactionString, "[]", "", true);
+                Utils.PrintException(e);
             }
-            melonPrefs.LoadFromFile(false);
-            ledger = JsonConvert.DeserializeObject<List<Transaction>>(melonPrefs.GetEntry<string>(ledgerString).Value);
-            List<Transaction> pendingTransactions = JsonConvert.DeserializeObject<List<Transaction>>(melonPrefs.GetEntry<string>(transactionString).Value);
-            
-            isInitialized = true;
-            Utils.Log($"AutoRestock manager initialized.");
 
-            if (pendingTransactions.Count > 0)
+            try
             {
-                Utils.Log($"Completing {pendingTransactions.Count} pending transaction{(pendingTransactions.Count > 1 ? "s" : "")}.");
-                CompleteTransactions(pendingTransactions);
+                List<Transaction> pendingTransactions = JsonConvert.DeserializeObject<List<Transaction>>(melonPrefs.GetEntry<string>(transactionString).Value);
+                if (pendingTransactions.Count > 0)
+                {
+                    Utils.Log($"Completing {pendingTransactions.Count} pending transaction{(pendingTransactions.Count > 1 ? "s" : "")}.");
+                    CompleteTransactions(pendingTransactions);
+                }
+            }
+            catch (Exception e)
+            {
+                Utils.PrintException(e);
             }
         }
 
@@ -1020,17 +1011,13 @@ namespace AutoRestock
         [HarmonyPrefix]
         public static bool SendCookOperationPrefix(ChemistryStation __instance, ChemistryCookOperation op)
         {
-            if (!InstanceFinder.IsServer)
+            if (!InstanceFinder.IsServer || !Manager.isInitialized)
             {
                 return true;
             }
 
             try
             {
-                if (!Manager.isInitialized)
-                {
-                    return true;
-                }
                 if (!Manager.melonPrefs.GetEntry<bool>("enableChemistryStations").Value)
                 {
                     return true;
@@ -1162,22 +1149,17 @@ namespace AutoRestock
     [HarmonyPatch]
     public class StorageEntityPatches : Sched1PatchesBase
     {
-
         [HarmonyPatch(typeof(MoveItemBehaviour), "TakeItem")]
         [HarmonyPrefix]
         public static void TakeItemPrefix(MoveItemBehaviour __instance)
         {
-            if (!InstanceFinder.IsServer)
+            if (!InstanceFinder.IsServer || !Manager.isInitialized)
             {
                 return;
             }
 
             try
             {
-                if (!Manager.isInitialized)
-                {
-                    return;
-                }
                 if ((int)Utils.CallMethod(typeof(MoveItemBehaviour), "GetAmountToGrab", __instance, []) > 0)
                 {
                     TransitRoute route = Utils.CastTo<TransitRoute>(Utils.GetField(typeof(MoveItemBehaviour), "assignedRoute", __instance));
@@ -1202,53 +1184,50 @@ namespace AutoRestock
         [HarmonyPostfix]
         public static void TakeItemPostfix(MoveItemBehaviour __instance)
         {
-            if (!InstanceFinder.IsServer)
+            if (!InstanceFinder.IsServer || !Manager.isInitialized) 
             {
                 return;
             }
 
-            if (!Manager.isInitialized)
+            try
             {
-                return;
+                TransitRoute route = Utils.CastTo<TransitRoute>(Utils.GetField(typeof(MoveItemBehaviour), "assignedRoute", __instance));
+                ItemInstance template = Utils.CastTo<ItemInstance>(Utils.GetField(typeof(MoveItemBehaviour), "itemToRetrieveTemplate", __instance));
+                ItemSlot slot = route.Source.GetFirstSlotContainingTemplateItem(template, ITransitEntity.ESlotType.Both);
+                if (slot != null)
+                {
+                    Manager.shelfAccessors.Remove(slot);
+                }
             }
-
-            TransitRoute route = Utils.CastTo<TransitRoute>(Utils.GetField(typeof(MoveItemBehaviour), "assignedRoute", __instance));
-            ItemInstance template = Utils.CastTo<ItemInstance>(Utils.GetField(typeof(MoveItemBehaviour), "itemToRetrieveTemplate", __instance));
-            ItemSlot slot = route.Source.GetFirstSlotContainingTemplateItem(template, ITransitEntity.ESlotType.Both);
-            if (slot != null)
+            catch (Exception e)
             {
-                Manager.shelfAccessors.Remove(slot);
+                Utils.PrintException(e);
             }
         }
 
         [HarmonyPatch(typeof(StorageEntity), "SetStoredInstance")]
         [HarmonyPrefix]
-        public static bool SetStoredInstancePrefix(StorageEntity __instance, int itemSlotIndex, ItemInstance instance)
+        public static void SetStoredInstancePrefix(StorageEntity __instance, int itemSlotIndex, ItemInstance instance)
         {
-            if (!InstanceFinder.IsServer)
+            if (!InstanceFinder.IsServer || !Manager.isInitialized)
             {
-                return true;
+                return;
             }
 
-            ItemSlot slot = null;
             try
             {
-                if (!Manager.isInitialized)
-                {
-                    return true;
-                }
                 if (!Manager.melonPrefs.GetEntry<bool>("enableStorage").Value)
                 {
-                    return true;
+                    return;
                 }
                 if (instance != null || !IsStorageRack(__instance))
                 {
-                    return true;
+                    return;
                 }
-                slot = __instance.ItemSlots.ToArray()[itemSlotIndex];
+                ItemSlot slot = __instance.ItemSlots.ToArray()[itemSlotIndex];
                 if (slot.ItemInstance == null)
                 {
-                    return true;
+                    return;
                 }
                 // is a player looking into the shelf?
                 if (__instance.CurrentAccessor != null)
@@ -1256,7 +1235,7 @@ namespace AutoRestock
                     // is the current slot being accessed by an NPC?
                     if (!Manager.shelfAccessors.ContainsKey(slot))
                     {
-                        return true;
+                        return;
                     }
                 }
                 StorableItemInstance newItem = Utils.CastTo<StorableItemInstance>(slot.ItemInstance.GetCopy(1));
@@ -1267,7 +1246,6 @@ namespace AutoRestock
                 Utils.Warn($"{MethodBase.GetCurrentMethod().DeclaringType.Name}:");
                 Utils.PrintException(e);
             }
-            return true;
         }
 
         private static bool IsStorageRack(StorageEntity item)

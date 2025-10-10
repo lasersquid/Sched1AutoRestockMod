@@ -1,7 +1,4 @@
-﻿using Il2CppScheduleOne.Building;
-using Il2CppScheduleOne.ItemFramework;
-using Il2CppScheduleOne.NPCs;
-using MelonLoader;
+﻿using MelonLoader;
 using System.Reflection;
 
 [assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.0", "lasersquid", null)]
@@ -18,13 +15,7 @@ namespace AutoRestock
         {
             CreateMelonPreferences();
             SetMod();
-            Utils.Mod = this;
             LoggerInstance.Msg("Mod initialized.");
-        }
-
-        private void ResetState()
-        {
-            RestoreDefaults();
         }
 
         private void CreateMelonPreferences()
@@ -61,24 +52,7 @@ namespace AutoRestock
                 MethodInfo method = t.GetMethod("SetMod", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
                 method.Invoke(null, [this]);
             }
-        }
-
-        public void RestoreDefaults()
-        {
-            foreach (var t in GetPatchTypes())
-            {
-                try
-                {
-                    MethodInfo method = t.GetMethod("RestoreDefaults", BindingFlags.Public | BindingFlags.Static);
-                    method.Invoke(null, null);
-                }
-                catch (Exception e)
-                {
-                    LoggerInstance.Warning($"Couldn't restore defaults for class {t.Name}: {e.GetType().Name} - {e.Message}");
-                    LoggerInstance.Warning($"Source: {e.Source}");
-                    LoggerInstance.Warning($"{e.StackTrace}");
-                }
-            }
+            Utils.SetMod(this);
         }
     }
 
@@ -114,5 +88,6 @@ namespace AutoRestock
 //  - any transactions mid-completion during save should be stored in MelonPreferences - done
 //  - deserialize transactions and complete on load - done
 //  - initialize manager after all objects in the scene are initialized - done
-//  - convert for mono release
+//  - convert for mono release - done
 //  - don't initialize/silence warnings for non-host multiplayer - needs testing
+//  - deserialize properly under mono
