@@ -6,6 +6,9 @@ using UnityEngine.Events;
 using System.Reflection;
 using Newtonsoft.Json;
 
+
+
+
 #if MONO_BUILD
 using FishNet;
 using ScheduleOne.Messaging;
@@ -23,6 +26,9 @@ using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.Management;
 using ScheduleOne.Persistence;
+using ScheduleOne.Persistence.Datas;
+using ScheduleOne.Properties;
+using ScheduleOne.UI;
 #else
 using Il2CppFishNet;
 using Il2CppScheduleOne.Messaging;
@@ -182,16 +188,25 @@ namespace AutoRestock
             return qualityIngredients.Contains(itemID);
         }
 
-        public static StorableItemInstance GetItem(string itemID)
+        public static ItemDefinition GetItemDef(string itemID)
         {
 #if MONO_BUILD
-            return new ItemInstance(ScheduleOne.Registry.GetItem(itemID), 1);
+            return ScheduleOne.Registry.GetItem(itemID);
+#else
+            return Il2CppScheduleOne.Registry.GetItem(itemID);
+#endif
+        }
+
+        public static StorableItemInstance GetItemInstance(string itemID)
+        {
+#if MONO_BUILD
+            return new StorableItemInstance(ScheduleOne.Registry.GetItem(itemID), 1);
 #else
             return new StorableItemInstance(Il2CppScheduleOne.Registry.GetItem(itemID), 1);
 #endif
         }
 
-        public static QualityItemInstance GetItem(string itemID, EQuality quality)
+        public static QualityItemInstance GetItemInstance(string itemID, EQuality quality)
         {
             Dictionary<EQuality, string> qualityStrings = new Dictionary<EQuality, string>
             {
@@ -212,12 +227,31 @@ namespace AutoRestock
                 qualityItemID = itemID;
             }
 
-#if MONO_BUILD
-            return new QualityItemInstance(ScheduleOne.Registry.GetItem(qualityItemID), 1, quality);
-#else
-            return new QualityItemInstance(Il2CppScheduleOne.Registry.GetItem(qualityItemID), 1, quality);
-#endif
+            return new QualityItemInstance(GetItemDef(qualityItemID), 1, quality);
         }
+        public static bool IsObjectStorageRack(IItemSlotOwner slotOwner)
+        {
+#if MONO_BUILD
+            string objName = ((UnityEngine.Object)slotOwner).name;
+#else
+            string objName = new UnityEngine.Object(slotOwner.Pointer).name;
+#endif
+            List<string> shelves = ["Safe", "Small Storage Rack", "Medium Storage Rack", "Large Storage Rack", "StorageRack"];
+            return shelves.Aggregate<string, bool>(false, (bool accum, string name) => accum || objName.Contains(name));
+        }
+
+        public static bool IsObjectBuildableItem(IItemSlotOwner slotOwner)
+        {
+#if MONO_BUILD
+            string objName = ((UnityEngine.Object)slotOwner).name;
+#else
+            string objName = new UnityEngine.Object(slotOwner.Pointer).name;
+#endif
+            List<string> stations = ["PackagingStation", "PackagingStationMk2", "Cauldron", "ChemistryStation", "MixingStation", "MixingStationMk2"];
+            return stations.Aggregate<string, bool>(false, (bool accum, string name) => accum || objName.Contains(name));
+
+        }
+
         public static bool IsObjectBuildableItem(string objName)
         {
             List<string> stations = ["PackagingStation", "PackagingStationMk2", "Cauldron", "ChemistryStation", "MixingStation", "MixingStationMk2"];
@@ -225,6 +259,13 @@ namespace AutoRestock
 
         }
 
+        public static bool IsObjectStorageRack(string objName)
+        {
+            List<string> shelves = ["Safe", "Small Storage Rack", "Medium Storage Rack", "Large Storage Rack", "StorageRack"];
+            return shelves.Aggregate<string, bool>(false, (bool accum, string name) => accum || objName.Contains(name));
+        }
+
+#if !MONO_BUILD
         public static bool IsObjectBuildableItem(IntPtr pointer)
         {
             string objName = new UnityEngine.Object(pointer).name;
@@ -236,12 +277,8 @@ namespace AutoRestock
             string objName = new UnityEngine.Object(pointer).name;
             return IsObjectStorageRack(objName);
         }
+#endif
 
-        public static bool IsObjectStorageRack(string objName)
-        {
-            List<string> shelves = ["Safe", "Small Storage Rack", "Medium Storage Rack", "Large Storage Rack", "StorageRack"];
-            return shelves.Aggregate<string, bool>(false, (bool accum, string name) => accum || objName.Contains(name));
-        }
     }
 
     public static class Manager
@@ -312,16 +349,25 @@ namespace AutoRestock
         {
             GridItem gridItem;
             string type;
-            if (Utils.IsObjectBuildableItem(slot.SlotOwner.Pointer))
+
+            if (Utils.IsObjectBuildableItem(slot.SlotOwner))
             {
+#if MONO_BUILD
+                BuildableItem buildableItem = (BuildableItem)slot.SlotOwner;
+#else
                 BuildableItem buildableItem = new BuildableItem(slot.SlotOwner.Pointer);
+#endif
                 gridItem = buildableItem.gameObject.GetComponent<GridItem>();
                 type = buildableItem.name;
 
             }
-            else if (Utils.IsObjectStorageRack(slot.SlotOwner.Pointer))
+            else if (Utils.IsObjectStorageRack(slot.SlotOwner))
             {
+#if MONO_BUILD
+                StorageEntity storageEntity = (StorageEntity)slot.SlotOwner;
+#else
                 StorageEntity storageEntity = new StorageEntity(slot.SlotOwner.Pointer);
+#endif
                 gridItem = storageEntity.gameObject.GetComponent<PlaceableStorageEntity>();
                 type = storageEntity.name;
             }
@@ -333,7 +379,7 @@ namespace AutoRestock
 
             string property = gridItem.ParentProperty.name;
 
-            return new SlotIdentifier(property, gridItem.OriginCoordinate, slot.SlotIndex, type);
+            return new SlotIdentifier(property, gridItem.OriginCoordinate, (int)Utils.GetProperty(typeof(ItemSlot), "SlotIndex", slot), type);
         }
 
         public static string StringToType(string typeString)
@@ -362,11 +408,16 @@ namespace AutoRestock
                 List<GridItem> gridItems = UnityEngine.Object.FindObjectsOfType<GridItem>().ToList<GridItem>();
 
                 Property property = properties.FirstOrDefault<Property>((Property p) => p.name == identifier.property);
-                List<GridItem> gridItemsOnProperty = gridItems.FindAll((GridItem g) => g.GetProperty() == property);
+                List<GridItem> gridItemsOnProperty = gridItems.FindAll((GridItem g) => g.ParentProperty == property);
                 GridItem gridItem = gridItemsOnProperty.Single<GridItem>((GridItem g) => g.OriginCoordinate == new Vector2(identifier.gridLocation[0], identifier.gridLocation[1]));
 
+#if MONO_BUILD
+                Component slotOwner = gridItem.gameObject.GetComponent(StringToType(identifier.type));
+                return ((IItemSlotOwner)slotOwner).ItemSlots[identifier.slotIndex];
+#else
                 Component slotOwner = gridItem.gameObject.GetComponentByName(StringToType(identifier.type));
                 return new IItemSlotOwner(slotOwner.Pointer).ItemSlots[identifier.slotIndex];
+#endif
             }
             catch (Exception e)
             {
@@ -388,7 +439,7 @@ namespace AutoRestock
                         Utils.Warn($"Couldn't deserialize slot!");
                         continue;
                     }
-                    StorableItemInstance item = Utils.GetItem(transaction.itemID);
+                    StorableItemInstance item = Utils.GetItemInstance(transaction.itemID);
                     TryReshelving(slot, item, transaction.quantity);
                 }
             }
@@ -419,7 +470,7 @@ namespace AutoRestock
             exclusiveLock = new Mutex();
 
             timeManager.onDayPass += new Action(Manager.OnDayPass);
-            saveManager.onSaveStart.AddListener(new Action(Manager.OnSaveStart));
+            saveManager.onSaveStart.AddListener(Utils.ToUnityAction(Manager.OnSaveStart));
 
             ledgerString = $"{GetSaveString()}_ledger";
             transactionString = $"{GetSaveString()}_inprogress";
@@ -492,7 +543,7 @@ namespace AutoRestock
                 List<string> blacklistItems = ["cocaleaf", "cocainebase", "liquidmeth"];
                 List<string> cashOnlyItems = ["cocaseed", "granddaddypurpleseed", "greencrackseed", "ogkushseed", "sourdieselseed"];
 
-                ItemDefinition itemDef = Il2CppScheduleOne.Registry.GetItem(itemID);
+                ItemDefinition itemDef = Utils.GetItemDef(itemID);
                 return ((whitelistCategories.Contains(itemDef.Category.ToString()) || whitelistItems.Contains(itemDef.ID)) &&
                     !blacklistItems.Contains(itemDef.ID));
             }
@@ -549,6 +600,37 @@ namespace AutoRestock
             }
         }
 
+#if MONO_BUILD
+        public static bool OwnedByNPC(ItemSlot slot)
+        {
+            if (isInitialized)
+            {
+                string slotOwnerName = ((UnityEngine.Object)slot.SlotOwner).name;
+                if (slotOwnerName.Contains("Cauldron"))
+                {
+                    return ((Cauldron)slot.SlotOwner).NPCUserObject != null;
+                }
+                else if (slotOwnerName.Contains("MixingStation") || slotOwnerName.Contains("MixingStationMk2"))
+                {
+                    return ((MixingStation)slot.SlotOwner).NPCUserObject != null;
+                }
+                else if (slotOwnerName.Contains("PackagingStation") || slotOwnerName.Contains("PackagingStationMk2"))
+                {
+                    return ((PackagingStation)slot.SlotOwner).NPCUserObject != null;
+                }
+                else if (slotOwnerName.Contains("ChemistryStation"))
+                {
+                    return ((ChemistryStation)slot.SlotOwner).NPCUserObject != null;
+                }
+                else if (slotOwnerName.Contains("StorageEntity"))
+                {
+                    return (slot.IsLocked || slot.IsAddLocked || slot.IsRemovalLocked);
+                }
+                return false;
+            }
+            return false;
+        }
+#else
         public static bool OwnedByNPC(ItemSlot slot)
         {
             if (isInitialized)
@@ -578,6 +660,7 @@ namespace AutoRestock
             }
             return false;
         }
+#endif
 
         private static IEnumerator ReshelveCoroutine(ItemSlot slot, ItemInstance item, NetworkObject lockOwner, Transaction transaction)
         {
@@ -717,7 +800,7 @@ namespace AutoRestock
                         receipt += $"{property}: \n";
                         foreach (var entry in itemTotals[property])
                         {
-                            string itemName = Il2CppScheduleOne.Registry.GetItem(entry.Key).Name;
+                            string itemName = Utils.GetItemDef(entry.Key).Name;
                             receipt += $"  {itemName} x{entry.Value} = ${itemPrices[entry.Key] * (float)entry.Value}\n";
                             propertyTotal += itemPrices[entry.Key] * (float)entry.Value;
                         }
@@ -843,7 +926,7 @@ namespace AutoRestock
                 }
                 if (Manager.melonPrefs.GetEntry<bool>("playerRestockStations").Value || __instance.PlayerUserObject == null)
                 {
-                    StorableItemInstance newItem = new StorableItemInstance(Il2CppScheduleOne.Registry.GetItem(operation.IngredientID), 1);
+                    StorableItemInstance newItem = Utils.GetItemInstance(operation.IngredientID);
                     Manager.TryReshelving(__instance.MixerSlot, newItem, newItem.StackLimit);
                 }
             }
@@ -1004,11 +1087,11 @@ namespace AutoRestock
                                 ItemInstance item;
                                 if (Utils.IsQualityIngredient(mapping[i].ID))
                                 {
-                                    item = Utils.GetItem(mapping[i].ID, op.ProductQuality);
+                                    item = Utils.GetItemInstance(mapping[i].ID, op.ProductQuality);
                                 }
                                 else
                                 {
-                                    item = Utils.GetItem(mapping[i].ID);
+                                    item = Utils.GetItemInstance(mapping[i].ID);
                                 }
 
                                 if (!emptySlots[i].DoesItemMatchPlayerFilters(item))
@@ -1036,12 +1119,12 @@ namespace AutoRestock
                             StorableItemInstance newItem;
                             if (Utils.IsQualityIngredient(newDef.Name))
                             {
-                                newItem = Utils.GetItem(newDef.ID, op.ProductQuality);
+                                newItem = Utils.GetItemInstance(newDef.ID, op.ProductQuality);
                                 Manager.TryReshelving(slot, newItem, newItem.StackLimit);
                             }
                             else
                             {
-                                newItem = Utils.GetItem(newDef.ID);
+                                newItem = Utils.GetItemInstance(newDef.ID);
                                 Manager.TryReshelving(slot, newItem, newItem.StackLimit);
                             }
                             emptySlotsFilled++;
@@ -1095,14 +1178,16 @@ namespace AutoRestock
                 {
                     return;
                 }
-                if (__instance.GetAmountToGrab() > 0)
+                if ((int)Utils.CallMethod(typeof(MoveItemBehaviour), "GetAmountToGrab", __instance, []) > 0)
                 {
-                    ItemSlot slot = __instance.assignedRoute.Source.GetFirstSlotContainingTemplateItem(__instance.itemToRetrieveTemplate, ITransitEntity.ESlotType.Both);
-                    if (slot.SlotOwner != null && Utils.IsObjectStorageRack(slot.SlotOwner.Pointer))
+                    TransitRoute route = Utils.CastTo<TransitRoute>(Utils.GetField(typeof(MoveItemBehaviour), "assignedRoute", __instance));
+                    ItemInstance template = Utils.CastTo<ItemInstance>(Utils.GetField(typeof(MoveItemBehaviour), "itemToRetrieveTemplate", __instance));
+                    ItemSlot slot = route.Source.GetFirstSlotContainingTemplateItem(template, ITransitEntity.ESlotType.Both);
+                    if (slot.SlotOwner != null && Utils.IsObjectStorageRack(slot.SlotOwner))
                     {
                         if (!Manager.shelfAccessors.TryAdd(slot, __instance.Npc))
                         {
-                            Utils.Log($"ItemSlot {slot.SlotIndex} is already in list of shelfAccessors?");
+                            Utils.Log($"ItemSlot is already in list of shelfAccessors?");
                         }
                     }
                 }
@@ -1127,7 +1212,9 @@ namespace AutoRestock
                 return;
             }
 
-            ItemSlot slot = __instance.assignedRoute.Source.GetFirstSlotContainingTemplateItem(__instance.itemToRetrieveTemplate, ITransitEntity.ESlotType.Both);
+            TransitRoute route = Utils.CastTo<TransitRoute>(Utils.GetField(typeof(MoveItemBehaviour), "assignedRoute", __instance));
+            ItemInstance template = Utils.CastTo<ItemInstance>(Utils.GetField(typeof(MoveItemBehaviour), "itemToRetrieveTemplate", __instance));
+            ItemSlot slot = route.Source.GetFirstSlotContainingTemplateItem(template, ITransitEntity.ESlotType.Both);
             if (slot != null)
             {
                 Manager.shelfAccessors.Remove(slot);
