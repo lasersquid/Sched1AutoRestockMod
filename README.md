@@ -4,7 +4,7 @@ If you're tired of spending all your time restocking shelves and stations, this 
 
 Compatible with IL2CPP and Mono versions (main and alternate branches) of Schedule I.
 
-[Nexus Mods Page](https://www.nexusmods.com/schedule1/mods/????)
+[Nexus Mods Page](https://www.nexusmods.com/schedule1/mods/1235)
 
 [Thunderstore Page (Mono)](https://thunderstore.io/c/schedule-i/p/lasersquid/AutoRestockMono/)
 
@@ -28,7 +28,7 @@ Compatible with IL2CPP and Mono versions (main and alternate branches) of Schedu
 
 
 ## Install instructions:
-* Vortex (from Nexus Mods) (RECOMMENDED): Open Vortex Mod Manager, then, in a browser, navigate to [mod page](https://www.nexusmods.com/schedule1/mods/????) and click "Vortex" download button, then select the appropriate version.
+* Vortex (from Nexus Mods) (RECOMMENDED): Open Vortex Mod Manager, then, in a browser, navigate to [mod page](https://www.nexusmods.com/schedule1/mods/1235) and click "Vortex" download button, then select the appropriate version.
 * Vortex (from DLL): Open Vortex Mod Manager, select game as Schedule I and click on "Mods" tab. Click "Install From File" button and navigate to appropriate dll.
 * Thunderstore/r2modman: Open Thunderstore/r2modman, select game, open or create a profile, then click "Get Mods", and search for "AutoRestock<IL2CPP/Mono>" by lasersquid. Or, navigate [here (mono)](https://thunderstore.io/c/schedule-i/p/lasersquid/AutoRestockMono/) or [here (il2cpp)](https://thunderstore.io/c/schedule-i/p/lasersquid/AutoRestockIL2CPP/), and click "Install with Mod Manager".
 * Manual: Copy IL2CPP/net6/AutoRestockIL2CPP.dll or Mono/netstandard21/AutoRestockMono.dll from project bin directory to Schedule I's mods directory.

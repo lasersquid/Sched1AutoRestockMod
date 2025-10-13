@@ -96,6 +96,22 @@ namespace AutoRestock
             Mod.LoggerInstance.Warning(message);
         }
 
+        public static void Debug(string message)
+        {
+            if (Manager.isInitialized && Manager.melonPrefs.GetEntry<bool>("debugLogs").Value)
+            {
+                Mod.LoggerInstance.Msg($"DEBUG: {message}");
+            }
+        }
+
+        public static void VerboseLog(string message)
+        {
+            if (Manager.isInitialized && Manager.melonPrefs.GetEntry<bool>("verboseLogs").Value)
+            {
+                Mod.LoggerInstance.Msg(message);
+            }
+        }
+
         public static object GetField(Type type, string fieldName, object target)
         {
 #if MONO_BUILD
@@ -405,7 +421,7 @@ namespace AutoRestock
                         continue;
                     }
                     StorableItemInstance item = Utils.GetItemInstance(transaction.itemID);
-                    TryReshelving(slot, item, transaction.quantity);
+                    TryRestocking(slot, item, transaction.quantity);
                 }
             }
             catch (Exception e)
@@ -485,11 +501,14 @@ namespace AutoRestock
 
         public static void StopCoroutines()
         {
-            foreach (var entry in coroutines)
+            if (isInitialized)
             {
-                MelonCoroutines.Stop(entry.Value);
+                foreach (var entry in coroutines)
+                {
+                    MelonCoroutines.Stop(entry.Value);
+                }
+                coroutines.Clear();
             }
-            coroutines.Clear();
         }
 
         public static void AcquireMutex()
@@ -524,9 +543,9 @@ namespace AutoRestock
             return false;
         }
 
-        public static void TryReshelving(ItemSlot slot, StorableItemInstance item, int quantity)
+        public static void TryRestocking(ItemSlot slot, StorableItemInstance item, int quantity)
         {
-            if (isInitialized)
+            if (isInitialized && InstanceFinder.IsServer)
             {
                 string itemID = item.ID;
                 float discount = Mathf.Clamp(melonPrefs.GetEntry<float>("itemDiscount").Value, 0f, 1f);
@@ -535,11 +554,13 @@ namespace AutoRestock
                 bool useCash = melonPrefs.GetEntry<bool>("payWithCash").Value;
                 bool useDebt = melonPrefs.GetEntry<bool>("useDebt").Value;
                 SlotIdentifier slotID = SerializeSlot(slot);
+                Utils.Debug($"Trying to reshelve {quantity}x {item.ID} at {slotID.property}, grid location ({slotID.gridLocation[0]},{slotID.gridLocation[1]}");
                 
                 try
                 {
-                    if ((!InstanceFinder.IsServer && OwnedByNPC(slot)) || (item.StackLimit == 0))
+                    if ((item.StackLimit == 0))
                     {
+                        Utils.Debug($"Stacklimit ({item.StackLimit}) == 0. Not restocking.");
                         item.RequestClearSlot();
                         return;
                     }
@@ -556,13 +577,15 @@ namespace AutoRestock
                             AcquireMutex();
                             Transaction transaction = new Transaction(itemID, quantity, discount, unitPrice, totalCost, useCash, slotID);
                             ledger.Add(transaction);
-                            coroutines[transaction] = MelonCoroutines.Start(ReshelveCoroutine(slot, item, lockOwner.NetworkObject, transaction));
+                            Utils.Debug($"Starting restock coroutine ({itemID} x{quantity} at {slotID.property}).");
+                            coroutines[transaction] = MelonCoroutines.Start(RestockCoroutine(slot, item, lockOwner.NetworkObject, transaction));
                             ReleaseMutex();
                         }
                     }
                 }
-                catch
+                catch (Exception e)
                 {
+                    Utils.PrintException(e);
                     ReleaseMutex();
                     item.RequestClearSlot();
                 }
@@ -636,16 +659,12 @@ namespace AutoRestock
         }
 #endif
 
-        private static IEnumerator ReshelveCoroutine(ItemSlot slot, StorableItemInstance item, NetworkObject lockOwner, Transaction transaction)
+        private static IEnumerator RestockCoroutine(ItemSlot slot, StorableItemInstance item, NetworkObject lockOwner, Transaction transaction)
         {
             slot.SetIsRemovalLocked(true);
             yield return new WaitForSeconds(1f);
 
-            bool isVerbose = melonPrefs.GetEntry<bool>("verboseLogs").Value;
-            if (isVerbose)
-            {
-                Utils.Log($"Restocking {item.Name} (${transaction.unitPrice}) x{transaction.quantity} at {transaction.slotID.property}. Total: ${transaction.totalCost}.");
-            }
+            Utils.VerboseLog($"Restocking {item.Name} (${transaction.unitPrice}) x{transaction.quantity} at {transaction.slotID.property}. Total: ${transaction.totalCost}.");
             if (transaction.quantity > 0)
             {
                 item.SetQuantity(transaction.quantity - slot.Quantity);
@@ -653,9 +672,9 @@ namespace AutoRestock
             }
             slot.SetIsRemovalLocked(false);
 
-            if (transaction.totalCost <= 0f && isVerbose)
+            if (transaction.totalCost <= 0f)
             {
-                Utils.Log($"Total cost of transaction is $0. Get a freebie!");
+                Utils.VerboseLog($"Total cost of transaction is $0. Get a freebie!");
             }
             else
             {
@@ -692,31 +711,30 @@ namespace AutoRestock
 
         public static void OnSaveStart()
         {
-            if (Manager.isInitialized)
+            if (Manager.isInitialized && InstanceFinder.IsServer)
             {
-                MelonPreferences_Category prefs = MelonPreferences.GetCategory("AutoRestock");
                 string todaysLedger = $"{GetSaveString()}_ledger";
-                if (prefs.HasEntry(todaysLedger))
+                if (melonPrefs.HasEntry(todaysLedger))
                 {
-                    prefs.GetEntry<string>(todaysLedger).EditedValue = LedgerToJson();
+                    melonPrefs.GetEntry<string>(todaysLedger).EditedValue = LedgerToJson();
                 }
                 else
                 {
-                    MelonPreferences_Entry entry = prefs.CreateEntry<string>(todaysLedger, "", "", true);
+                    MelonPreferences_Entry entry = melonPrefs.CreateEntry<string>(todaysLedger, "", "", true);
                     entry.BoxedEditedValue = LedgerToJson();
                 }
                 string transactionsInProgress = $"{GetSaveString()}_inprogress";
-                if (prefs.HasEntry(transactionsInProgress))
+                if (melonPrefs.HasEntry(transactionsInProgress))
                 {
-                    prefs.GetEntry<string>(transactionsInProgress).EditedValue = PendingTransactionsToJson();
+                    melonPrefs.GetEntry<string>(transactionsInProgress).EditedValue = PendingTransactionsToJson();
                 }
                 else
                 {
-                    MelonPreferences_Entry entry = prefs.CreateEntry<string>(transactionsInProgress, "", "", true);
+                    MelonPreferences_Entry entry = melonPrefs.CreateEntry<string>(transactionsInProgress, "", "", true);
                     entry.BoxedEditedValue = PendingTransactionsToJson();
                 }
 
-                prefs.SaveToFile(false);
+                melonPrefs.SaveToFile(false);
             }
         }
 
@@ -775,14 +793,14 @@ namespace AutoRestock
                             receipt += $"  {itemName} x{entry.Value} = ${itemPrices[entry.Key] * (float)entry.Value}\n";
                             propertyTotal += itemPrices[entry.Key] * (float)entry.Value;
                         }
-                        receipt += "\n======================\n";
+                        receipt += "=====================\n";
                         receipt += $"  Property total: ${propertyTotal}\n\n";
                         total += propertyTotal;
                     }
                 }
-                receipt += "\n======================\n";
+                receipt += "=====================\n";
                 receipt += $"  Grand total: ${total}\n\n";
-                receipt += $" Oscar says thank you for your business! :)";
+                receipt += $"Oscar says thank you for your business! :)";
 
                 return receipt;
             }
@@ -820,7 +838,7 @@ namespace AutoRestock
         [HarmonyPrefix]
         public static void ExitToMenuPrefix(LoadManager __instance)
         {
-            if (InstanceFinder.IsServer)
+            if (InstanceFinder.IsServer && Manager.isInitialized)
             {
                 Manager.Stop();
             }
@@ -834,17 +852,14 @@ namespace AutoRestock
         [HarmonyPrefix]
         public static bool RemoveIngredientsPrefix(Cauldron __instance)
         {
-            if (!InstanceFinder.IsServer)
+            if (!InstanceFinder.IsServer || !Manager.isInitialized)
             {
+                
                 return true;
             }
 
             try
             {
-                if (!Manager.isInitialized)
-                {
-                    return true;
-                }
                 if (!Manager.melonPrefs.GetEntry<bool>("enableCauldrons").Value)
                 {
                     return true;
@@ -857,7 +872,7 @@ namespace AutoRestock
                     __instance.PlayerUserObject == null)
                 {
                     StorableItemInstance newItem = Utils.CastTo<StorableItemInstance>(__instance.LiquidSlot.ItemInstance.GetCopy(1));
-                    Manager.TryReshelving(__instance.LiquidSlot, newItem, newItem.StackLimit);
+                    Manager.TryRestocking(__instance.LiquidSlot, newItem, newItem.StackLimit);
                 }
             }
             catch (Exception e)
@@ -876,29 +891,25 @@ namespace AutoRestock
         [HarmonyPrefix]
         public static bool SendMixingOperationPrefix(MixingStation __instance, MixOperation operation)
         {
-            if (!InstanceFinder.IsServer)
+            if (!InstanceFinder.IsServer || !Manager.isInitialized)
             {
                 return true;
             }
 
             try
             {
-                if (!Manager.isInitialized)
-                {
-                    return true;
-                }
                 if (!Manager.melonPrefs.GetEntry<bool>("enableMixingStations").Value)
                 {
                     return true;
                 }
-                if (__instance.MixerSlot.ItemInstance != null)
+                if ((__instance.MixerSlot.Quantity - operation.Quantity) >= ((MixingStationConfiguration)Utils.GetProperty(typeof(MixingStation), "stationConfiguration", __instance)).StartThrehold.GetData().Value)
                 {
                     return true;
                 }
                 if (Manager.melonPrefs.GetEntry<bool>("playerRestockStations").Value || __instance.PlayerUserObject == null)
                 {
                     StorableItemInstance newItem = Utils.GetItemInstance(operation.IngredientID);
-                    Manager.TryReshelving(__instance.MixerSlot, newItem, newItem.StackLimit);
+                    Manager.TryRestocking(__instance.MixerSlot, newItem, newItem.StackLimit);
                 }
             }
             catch (Exception e)
@@ -917,17 +928,13 @@ namespace AutoRestock
         [HarmonyPrefix]
         public static bool PackSingleInstancePrefix(PackagingStation __instance)
         {
-            if (!InstanceFinder.IsServer)
+            if (!InstanceFinder.IsServer || !Manager.isInitialized)
             {
                 return true;
             }
 
             try
             {
-                if (!Manager.isInitialized)
-                {
-                    return true;
-                }
                 if (!Manager.melonPrefs.GetEntry<bool>("enablePackagingStations").Value)
                 {
                     return true;
@@ -939,7 +946,7 @@ namespace AutoRestock
                 if (Manager.melonPrefs.GetEntry<bool>("playerRestockStations").Value || __instance.PlayerUserObject == null)
                 {
                     StorableItemInstance newItem = Utils.CastTo<StorableItemInstance>(__instance.PackagingSlot.ItemInstance.GetCopy(1));
-                    Manager.TryReshelving(__instance.PackagingSlot, newItem, newItem.StackLimit);
+                    Manager.TryRestocking(__instance.PackagingSlot, newItem, newItem.StackLimit);
                 }
             }
             catch (Exception e)
@@ -1086,12 +1093,12 @@ namespace AutoRestock
                             if (Utils.IsQualityIngredient(newDef.ID))
                             {
                                 QualityItemInstance newItem = Utils.GetItemInstance(newDef.ID, op.ProductQuality);
-                                Manager.TryReshelving(slot, newItem, newItem.StackLimit);
+                                Manager.TryRestocking(slot, newItem, newItem.StackLimit);
                             }
                             else
                             {
                                 StorableItemInstance newItem = Utils.GetItemInstance(newDef.ID);
-                                Manager.TryReshelving(slot, newItem, newItem.StackLimit);
+                                Manager.TryRestocking(slot, newItem, newItem.StackLimit);
                             }
                             emptySlotsFilled++;
                         }
@@ -1110,7 +1117,7 @@ namespace AutoRestock
                             if (quantity > 0 && slot.ItemInstance.Quantity < quantity)
                             {
                                 StorableItemInstance newItem = Utils.CastTo<StorableItemInstance>(slot.ItemInstance.GetCopy(1));
-                                Manager.TryReshelving(slot, newItem, newItem.StackLimit);
+                                Manager.TryRestocking(slot, newItem, newItem.StackLimit);
                             }
                         }
                     }
@@ -1218,7 +1225,7 @@ namespace AutoRestock
                     }
                 }
                 StorableItemInstance newItem = Utils.CastTo<StorableItemInstance>(slot.ItemInstance.GetCopy(1));
-                Manager.TryReshelving(slot, newItem, newItem.StackLimit);
+                Manager.TryRestocking(slot, newItem, newItem.StackLimit);
             }
             catch (Exception e)
             {

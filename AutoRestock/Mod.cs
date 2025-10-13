@@ -1,7 +1,7 @@
 ﻿using MelonLoader;
 using System.Reflection;
 
-[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.0", "lasersquid", null)]
+[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.1", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace AutoRestock
@@ -25,14 +25,15 @@ namespace AutoRestock
 
             melonPrefs.CreateEntry<float>("itemDiscount", 0f, "Restock discount", "Discount applied to restock price (0.2 = 20% off)");
             melonPrefs.CreateEntry<bool>("payWithCash", true, "Pay for restock with cash", "True to pay with cash, false to pay with bank account");
-            melonPrefs.CreateEntry<bool>("useDebt", true, "Enable debt", "Enable restocking even when zero or negative cash/bank balance");
-            melonPrefs.CreateEntry<bool>("enableCauldrons", true, "Enable auto-restock on cauldrons");
-            melonPrefs.CreateEntry<bool>("enableMixingStations", true, "Enable auto-restock on mixing stations");
-            melonPrefs.CreateEntry<bool>("enableChemistryStations", true, "Enable auto-restock on chemistry stations");
-            melonPrefs.CreateEntry<bool>("enablePackagingStations", true, "Enable auto-restock on packaging stations");
-            melonPrefs.CreateEntry<bool>("enableStorage", true, "Enable auto-restock on storage (shelves and safes)");
-            melonPrefs.CreateEntry<bool>("playerRestockStations", true, "Enable auto-restock on stations after player-initiated actions");
-            melonPrefs.CreateEntry<bool>("verboseLogs", false, "Print to the log for each auto-restock transaction");
+            melonPrefs.CreateEntry<bool>("useDebt", false, "Enable debt", "Enable restocking even when zero or negative cash/bank balance");
+            melonPrefs.CreateEntry<bool>("enableCauldrons", true, "Enable auto-restock on cauldrons", "Enable auto-restock on cauldrons");
+            melonPrefs.CreateEntry<bool>("enableMixingStations", true, "Enable auto-restock on mixing stations", "Enable auto-restock on mixing stations");
+            melonPrefs.CreateEntry<bool>("enableChemistryStations", true, "Enable auto-restock on chemistry stations", "Enable auto-restock on chemistry stations");
+            melonPrefs.CreateEntry<bool>("enablePackagingStations", true, "Enable auto-restock on packaging stations", "Enable auto-restock on packaging stations");
+            melonPrefs.CreateEntry<bool>("enableStorage", true, "Enable auto-restock on storage (shelves and safes)", "Enable auto-restock on storage (shelves and safes)");
+            melonPrefs.CreateEntry<bool>("playerRestockStations", true, "Enable auto-restock on stations after player-initiated actions (start cauldron, etc)", "Enable auto-restock on stations after player-initiated actions (start cauldron, etc)");
+            melonPrefs.CreateEntry<bool>("verboseLogs", false, "Print to the log for each auto-restock transaction", "Print to the log for each auto-restock transaction");
+            melonPrefs.CreateEntry<bool>("debugLogs", false, "Print debug logs", "Print debug logs");
 
             melonPrefs.SaveToFile(false);
         }
@@ -91,4 +92,5 @@ namespace AutoRestock
 //  - don't initialize/silence warnings for non-host multiplayer - needs testing
 //  - deserialize properly under mono - done
 //  - restock quality items properly in mono - done
-//  - make icon
+//  - make icon - done (v1.0.0)
+//  - make mixing station refill when below start threshold - done (v1.0.1)
