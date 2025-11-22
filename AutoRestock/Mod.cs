@@ -1,7 +1,11 @@
 ﻿using MelonLoader;
 using System.Reflection;
 
+<<<<<<< HEAD
 [assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.1", "lasersquid", null)]
+=======
+[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.2", "lasersquid", null)]
+>>>>>>> 226b11f (Update version number to 1.0.2 for Melon)
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace AutoRestock
