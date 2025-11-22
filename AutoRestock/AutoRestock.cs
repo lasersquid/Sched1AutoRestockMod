@@ -1216,7 +1216,7 @@ namespace AutoRestock
                     return;
                 }
                 // is a player looking into the shelf?
-                if (__instance.CurrentAccessor != null)
+                if (__instance.CurrentPlayerAccessor != null)
                 {
                     // is the current slot being accessed by an NPC?
                     if (!Manager.shelfAccessors.ContainsKey(slot))
