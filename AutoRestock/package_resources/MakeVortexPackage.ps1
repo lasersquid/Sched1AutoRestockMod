@@ -1,6 +1,6 @@
 
 param (
-    [string]$ver = "1.0.0",
+    [string]$ver = "1.0.2",
     [string]$arch = "IL2CPP",
     [string]$proj = ""
  )
