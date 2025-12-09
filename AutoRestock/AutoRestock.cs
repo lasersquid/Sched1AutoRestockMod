@@ -684,7 +684,7 @@ namespace AutoRestock
                 }
                 else
                 {
-                    moneyManager.CreateOnlineTransaction("Restock", -transaction.totalCost, transaction.quantity, $"{item.Definition.Name}");
+                    moneyManager.CreateOnlineTransaction("Restock", -transaction.totalCost/(float)transaction.quantity, transaction.quantity, $"{item.Definition.Name}");
                 }
             }
             Manager.AcquireMutex();

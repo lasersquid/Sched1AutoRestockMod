@@ -1,15 +1,7 @@
 ﻿using MelonLoader;
 using System.Reflection;
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.1", "lasersquid", null)]
-=======
 [assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.2", "lasersquid", null)]
->>>>>>> 226b11f (Update version number to 1.0.2 for Melon)
-=======
-[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.2", "lasersquid", null)]
->>>>>>> 415ad80 (Merge pull request #3 from MaxKruse/master)
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace AutoRestock
@@ -102,3 +94,5 @@ namespace AutoRestock
 //  - restock quality items properly in mono - done
 //  - make icon - done (v1.0.0)
 //  - make mixing station refill when below start threshold - done (v1.0.1)
+//  - fix for 0.4.1f12 - done
+//  - fix overcharging for online transactions - done (v1.0.2)
