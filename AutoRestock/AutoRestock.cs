@@ -549,12 +549,12 @@ namespace AutoRestock
             {
                 string itemID = item.ID;
                 float discount = Mathf.Clamp(melonPrefs.GetEntry<float>("itemDiscount").Value, 0f, 1f);
-                float unitPrice = item.GetMonetaryValue() / (float)item.Quantity;
+                float unitPrice = item.GetMonetaryValue() * 2f / (float)item.Quantity;
                 float totalCost = unitPrice * quantity * (1f - discount);
                 bool useCash = melonPrefs.GetEntry<bool>("payWithCash").Value;
                 bool useDebt = melonPrefs.GetEntry<bool>("useDebt").Value;
                 SlotIdentifier slotID = SerializeSlot(slot);
-                Utils.Debug($"Trying to reshelve {quantity}x {item.ID} at {slotID.property}, grid location ({slotID.gridLocation[0]},{slotID.gridLocation[1]}");
+                //Utils.Debug($"Trying to restock {quantity}x {item.ID} at {slotID.property}, grid location ({slotID.gridLocation[0]},{slotID.gridLocation[1]}");
                 
                 try
                 {

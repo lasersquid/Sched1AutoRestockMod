@@ -1,7 +1,7 @@
 ﻿using MelonLoader;
 using System.Reflection;
 
-[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.2", "lasersquid", null)]
+[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.3", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace AutoRestock
@@ -96,3 +96,5 @@ namespace AutoRestock
 //  - make mixing station refill when below start threshold - done (v1.0.1)
 //  - fix for 0.4.1f12 - done
 //  - fix overcharging for online transactions - done (v1.0.2)
+//  - calculate *buy* unit price instead of sell unit price - done (v1.0.3)
+
