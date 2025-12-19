@@ -37,6 +37,9 @@ Copy "bin\$($arch)\$($net_ver)\$($dll_file)" "$($pkg_base)\Mods"
 Copy 'package_resources\icon.png' "$($pkg_base)\icon.png"
 Copy 'package_resources\README.md' "$($pkg_base)\README.md"
 Copy 'package_resources\manifest.json' "$($pkg_base)\manifest.json"
+if (Test-Path -Path 'package_resources\extras') {
+    Copy 'package_resources\extras\*' "$($pkg_base)\Mods"
+}
 
 # Set version and arch strings
 $json = [System.IO.File]::ReadAllText("$($pkg_base)\manifest.json")

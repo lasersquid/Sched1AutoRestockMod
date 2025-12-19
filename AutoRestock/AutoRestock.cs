@@ -48,16 +48,6 @@ using Il2CppScheduleOne.UI;
 
 namespace AutoRestock
 {
-    public class Sched1PatchesBase
-    {
-        protected static AutoRestockMod Mod;
-
-        public static void SetMod(AutoRestockMod mod)
-        {
-            Mod = mod;
-        }
-    }
-
     public static class Utils
     {
         private static AutoRestockMod Mod;
@@ -145,6 +135,11 @@ namespace AutoRestock
             return AccessTools.Method(type, methodName).Invoke(target, args);
         }
 
+        public static object CallMethod(Type type, string methodName, Type[] argTypes, object target, object[] args)
+        {
+            return AccessTools.Method(type, methodName, argTypes).Invoke(target, args);
+        }
+
         public static T CastTo<T>(object o) where T : class
         {
             if (o is T)
@@ -190,6 +185,20 @@ namespace AutoRestock
 #else
             return DelegateSupport.ConvertDelegate<UnityAction<T>>(action);
 #endif
+        }
+
+        // Compare unity objects by their instance ID
+        public class UnityObjectComparer : IEqualityComparer<UnityEngine.Object>
+        {
+            public bool Equals(UnityEngine.Object a, UnityEngine.Object b)
+            {
+                return a.GetInstanceID() == b.GetInstanceID();
+            }
+
+            public int GetHashCode(UnityEngine.Object item)
+            {
+                return item.GetInstanceID();
+            }
         }
 
         public static bool IsQualityIngredient(string itemID)
@@ -812,7 +821,7 @@ namespace AutoRestock
     }
 
     [HarmonyPatch]
-    public class PersistencePatches: Sched1PatchesBase
+    public class PersistencePatches
     {
         // LoadManager.Start is too early.
         // Player.Activate just doesn't fire at all
@@ -846,7 +855,7 @@ namespace AutoRestock
     }
 
     [HarmonyPatch]
-    public class CauldronPatches : Sched1PatchesBase
+    public class CauldronPatches
     {
         [HarmonyPatch(typeof(Cauldron), "RemoveIngredients")]
         [HarmonyPrefix]
@@ -885,7 +894,7 @@ namespace AutoRestock
     }
 
     [HarmonyPatch]
-    public class MixingStationPatches : Sched1PatchesBase
+    public class MixingStationPatches
     {
         [HarmonyPatch(typeof(MixingStation), "SendMixingOperation")]
         [HarmonyPrefix]
@@ -922,7 +931,7 @@ namespace AutoRestock
     }
 
     [HarmonyPatch]
-    public class PackagingStationPatches : Sched1PatchesBase
+    public class PackagingStationPatches
     {
         [HarmonyPatch(typeof(PackagingStation), "PackSingleInstance")]
         [HarmonyPrefix]
@@ -960,7 +969,7 @@ namespace AutoRestock
     }
 
     [HarmonyPatch]
-    public class ChemistryStationPatches : Sched1PatchesBase
+    public class ChemistryStationPatches
     {
         static List<List<T>> Permute<T>(List<T> nums)
         {
@@ -1133,7 +1142,7 @@ namespace AutoRestock
     }
 
     [HarmonyPatch]
-    public class StorageEntityPatches : Sched1PatchesBase
+    public class StorageEntityPatches
     {
         [HarmonyPatch(typeof(MoveItemBehaviour), "TakeItem")]
         [HarmonyPrefix]

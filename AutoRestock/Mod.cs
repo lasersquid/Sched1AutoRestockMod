@@ -1,7 +1,7 @@
 ﻿using MelonLoader;
 using System.Reflection;
 
-[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.3", "lasersquid", null)]
+[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.5", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace AutoRestock
@@ -14,7 +14,7 @@ namespace AutoRestock
         public override void OnInitializeMelon()
         {
             CreateMelonPreferences();
-            SetMod();
+            Utils.SetMod(this);
             LoggerInstance.Msg("Mod initialized.");
         }
 
@@ -36,24 +36,6 @@ namespace AutoRestock
             melonPrefs.CreateEntry<bool>("debugLogs", false, "Print debug logs", "Print debug logs");
 
             melonPrefs.SaveToFile(false);
-        }
-
-        private List<Type> GetPatchTypes()
-        {
-            return System.Reflection.Assembly.GetExecutingAssembly()
-                .GetTypes()
-                .Where(t => t.Name.EndsWith("Patches"))
-                .ToList<Type>();
-        }
-
-        private void SetMod()
-        {
-            foreach (var t in GetPatchTypes())
-            {
-                MethodInfo method = t.GetMethod("SetMod", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
-                method.Invoke(null, [this]);
-            }
-            Utils.SetMod(this);
         }
     }
 

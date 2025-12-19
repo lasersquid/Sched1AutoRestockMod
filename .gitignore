@@ -366,5 +366,6 @@ FodyWeavers.xsd
 **/il2cpp_libs/*
 **/mono_libs/*
 
-# Ignore package dir
+# Ignore generated dirs
 **/package/*
+**/Properties/*
