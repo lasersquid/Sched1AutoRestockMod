@@ -371,7 +371,10 @@ namespace AutoRestock
 
             string property = gridItem.ParentProperty.name;
 
-            return new SlotIdentifier(property, gridItem.OriginCoordinate, (int)Utils.GetProperty(typeof(ItemSlot), "SlotIndex", slot), type);
+            // Fix: use _originCoordinate instead of OriginCoordinate
+            Vector2 coordinate = (Vector2)gridItem.GetType().GetProperty("_originCoordinate").GetValue(gridItem);
+
+            return new SlotIdentifier(property, coordinate, (int)Utils.GetProperty(typeof(ItemSlot), "SlotIndex", slot), type);
         }
 
         public static string StringToType(string typeString)
@@ -400,10 +403,16 @@ namespace AutoRestock
                 List<GridItem> gridItems = UnityEngine.Object.FindObjectsOfType<GridItem>().ToList();
                 Property property = properties.FirstOrDefault<Property>((Property p) => p.name == identifier.property);
                 List<GridItem> gridItemsOnProperty = gridItems.FindAll((GridItem g) => g.ParentProperty == property);
-                GridItem gridItem = gridItemsOnProperty.Single<GridItem>((GridItem g) => g.OriginCoordinate == new Vector2(identifier.gridLocation[0], identifier.gridLocation[1]));
+
+                // FIXED: Use _originCoordinate instead of OriginCoordinate
+                var targetCoord = new Vector2(identifier.gridLocation[0], identifier.gridLocation[1]);
+                GridItem gridItem = gridItemsOnProperty.Single<GridItem>((GridItem g) =>
+                    (Vector2)g.GetType().GetProperty("_originCoordinate").GetValue(g) == targetCoord
+                );
+
 #if MONO_BUILD
-                Component slotOwner = gridItem.gameObject.GetComponent(StringToType(identifier.type));
-                return ((IItemSlotOwner)slotOwner).ItemSlots[identifier.slotIndex];
+        Component slotOwner = gridItem.gameObject.GetComponent(StringToType(identifier.type));
+        return ((IItemSlotOwner)slotOwner).ItemSlots[identifier.slotIndex];
 #else
                 Component slotOwner = gridItem.gameObject.GetComponentByName(StringToType(identifier.type));
                 return new IItemSlotOwner(slotOwner.Pointer).ItemSlots[identifier.slotIndex];
