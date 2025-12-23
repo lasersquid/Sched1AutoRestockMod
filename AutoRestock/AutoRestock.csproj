@@ -31,6 +31,8 @@
 		<Configurations>IL2CPP;Mono</Configurations>
 		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
 		<EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    <!-- ADD THIS LINE -->
 	</PropertyGroup>
 
 	<!-- Hide libs directory of other Configuration -->
