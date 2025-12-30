@@ -30,6 +30,7 @@ namespace AutoRestock
             melonPrefs.CreateEntry<bool>("enableMixingStations", true, "Enable auto-restock on mixing stations", "Enable auto-restock on mixing stations");
             melonPrefs.CreateEntry<bool>("enableChemistryStations", true, "Enable auto-restock on chemistry stations", "Enable auto-restock on chemistry stations");
             melonPrefs.CreateEntry<bool>("enablePackagingStations", true, "Enable auto-restock on packaging stations", "Enable auto-restock on packaging stations");
+            melonPrefs.CreateEntry<bool>("enableSpawnStations", true, "Enable auto-restock on mushroom spawn stations", "Enable auto-restock on mushroom spawn stations");
             melonPrefs.CreateEntry<bool>("enableStorage", true, "Enable auto-restock on storage (shelves and safes)", "Enable auto-restock on storage (shelves and safes)");
             melonPrefs.CreateEntry<bool>("playerRestockStations", true, "Enable auto-restock on stations after player-initiated actions (start cauldron, etc)", "Enable auto-restock on stations after player-initiated actions (start cauldron, etc)");
             melonPrefs.CreateEntry<bool>("verboseLogs", false, "Print to the log for each auto-restock transaction", "Print to the log for each auto-restock transaction");
@@ -79,4 +80,7 @@ namespace AutoRestock
 //  - fix for 0.4.1f12 - done
 //  - fix overcharging for online transactions - done (v1.0.2)
 //  - calculate *buy* unit price instead of sell unit price - done (v1.0.3)
+//  - fix gridcoordinate property access - done (v1.0.4)
+//  - genericize utils methods - done
+//  - add spawn station patches - done (v1.0.5)
 
