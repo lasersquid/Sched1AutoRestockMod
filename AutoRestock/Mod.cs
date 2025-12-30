@@ -1,7 +1,7 @@
 ﻿using MelonLoader;
 using System.Reflection;
 
-[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.5", "lasersquid", null)]
+[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.6", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace AutoRestock
@@ -9,6 +9,7 @@ namespace AutoRestock
     public class AutoRestockMod : MelonMod
     {
         public MelonPreferences_Category melonPrefs;
+        private bool prefsInitialized = false;
         public HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("com.lasersquid.autorestock");
 
         public override void OnInitializeMelon()
@@ -16,6 +17,15 @@ namespace AutoRestock
             CreateMelonPreferences();
             Utils.SetMod(this);
             LoggerInstance.Msg("Mod initialized.");
+        }
+
+        public override void OnPreferencesSaved()
+        {
+            base.OnPreferencesSaved();
+            if (prefsInitialized)
+            {
+                melonPrefs.LoadFromFile(false);
+            }
         }
 
         private void CreateMelonPreferences()
@@ -37,6 +47,7 @@ namespace AutoRestock
             melonPrefs.CreateEntry<bool>("debugLogs", false, "Print debug logs", "Print debug logs");
 
             melonPrefs.SaveToFile(false);
+            prefsInitialized = true;
         }
     }
 
@@ -83,4 +94,5 @@ namespace AutoRestock
 //  - fix gridcoordinate property access - done (v1.0.4)
 //  - genericize utils methods - done
 //  - add spawn station patches - done (v1.0.5)
+//  - use getfield instead of getproperty for griditem._origincoordinate - done (v1.0.6)
 

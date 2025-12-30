@@ -452,7 +452,7 @@ namespace AutoRestock
             string property = gridItem.ParentProperty.name;
 
             // Fix: use _originCoordinate instead of OriginCoordinate
-            Vector2 coordinate = (Vector2)Utils.GetProperty<GridItem>("_originCoordinate", gridItem);
+            Vector2 coordinate = (Vector2)Utils.GetField<GridItem>("_originCoordinate", gridItem);
             return new SlotIdentifier(property, coordinate, (int)Utils.GetProperty<ItemSlot>("SlotIndex", slot), type);
         }
 
@@ -468,7 +468,7 @@ namespace AutoRestock
                 // FIXED: Use _originCoordinate instead of OriginCoordinate
                 Vector2 targetCoord = new Vector2(identifier.gridLocation[0], identifier.gridLocation[1]);
                 GridItem gridItem = gridItemsOnProperty.Single<GridItem>((GridItem g) => 
-                    (Vector2)Utils.GetProperty<GridItem>("_originCoordinate", g) == targetCoord
+                    (Vector2)Utils.GetField<GridItem>("_originCoordinate", g) == targetCoord
                 );
 
                 IItemSlotOwner slotOwner = null;
@@ -1279,12 +1279,12 @@ namespace AutoRestock
             MushroomSpawnStation station = Utils.GetField<InocculateGrainBagTask, MushroomSpawnStation>("_station", __instance);
             if (station.GrainBagSlot.Quantity == 0 && Manager.melonPrefs.GetEntry<bool>("enableSpawnStations").Value && Manager.melonPrefs.GetEntry<bool>("playerRestockStations").Value)
             {
-                StorableItemInstance grainBagInstance = Utils.GetField<InocculateGrainBagTask, StorableItemInstance>("_grainBagInstance", __instance);
+                StorableItemInstance grainBagInstance = Utils.GetItemInstance("grainbag");
                 Manager.TryRestocking(station.GrainBagSlot, grainBagInstance, grainBagInstance.StackLimit);
             }
             if (station.SyringeSlot.Quantity == 0 && Manager.melonPrefs.GetEntry<bool>("enableSpawnStations").Value && Manager.melonPrefs.GetEntry<bool>("playerRestockStations").Value)
             {
-                StorableItemInstance syringeInstance = Utils.GetField<InocculateGrainBagTask, StorableItemInstance>("_syringeInstance", __instance);
+                StorableItemInstance syringeInstance = Utils.GetItemInstance("sporesyringe");
                 Manager.TryRestocking(station.SyringeSlot, syringeInstance, syringeInstance.StackLimit);
             }
         }
