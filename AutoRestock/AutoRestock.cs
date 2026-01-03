@@ -6,7 +6,6 @@ using UnityEngine.Events;
 using System.Reflection;
 using Newtonsoft.Json;
 
-
 #if MONO_BUILD
 using FishNet.Object;
 using FishNet;
@@ -25,8 +24,9 @@ using ScheduleOne.PlayerTasks;
 using ScheduleOne.Property;
 using ScheduleOne.StationFramework;
 using ScheduleOne.Storage;
+using ScheduleOne.UI.Items;
 using ScheduleOne.UI;
-using ItemDefList = System.Collections.Generic.List<ScheduleOne.ItemFramework.ItemDefinition>;
+using ScheduleOne;
 using Registry = ScheduleOne.Registry;
 #else
 using Il2CppFishNet.Object;
@@ -48,9 +48,10 @@ using Il2CppScheduleOne.PlayerTasks;
 using Il2CppScheduleOne.Property;
 using Il2CppScheduleOne.StationFramework;
 using Il2CppScheduleOne.Storage;
+using Il2CppScheduleOne.UI.Items;
 using Il2CppScheduleOne.UI;
+using Il2CppScheduleOne;
 using Registry = Il2CppScheduleOne.Registry;
-using ItemDefList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.ItemFramework.ItemDefinition>;
 #endif
 
 namespace AutoRestock
@@ -58,10 +59,12 @@ namespace AutoRestock
     public static class Utils
     {
         private static AutoRestockMod Mod;
+        private static Assembly S1Assembly;
 
-        public static void SetMod(AutoRestockMod mod)
+        public static void Initialize(AutoRestockMod mod)
         {
             Mod = mod;
+            S1Assembly = AppDomain.CurrentDomain.GetAssemblies().First((Assembly a) => a.GetName().Name == "Assembly-CSharp");
         }
 
         public static void PrintException(Exception e)
@@ -111,7 +114,7 @@ namespace AutoRestock
 
         public static Treturn GetField<Ttarget, Treturn>(string fieldName, object target) where Treturn : class
         {
-            return CastTo<Treturn>(GetField<Ttarget>(fieldName, target));
+            return (Treturn)GetField<Ttarget>(fieldName, target);
         }
 
         public static object GetField<Ttarget>(string fieldName, object target)
@@ -134,7 +137,7 @@ namespace AutoRestock
 
         public static Treturn GetProperty<Ttarget, Treturn>(string fieldName, object target) where Treturn : class
         {
-            return CastTo<Treturn>(GetProperty<Ttarget>(fieldName, target));
+            return (Treturn)GetProperty<Ttarget>(fieldName, target);
         }
 
         public static object GetProperty<Ttarget>(string fieldName, object target)
@@ -149,17 +152,17 @@ namespace AutoRestock
 
         public static Treturn CallMethod<Ttarget, Treturn>(string methodName, object target) where Treturn : class
         {
-            return CastTo<Treturn>(CallMethod<Ttarget>(methodName, target, []));
+            return (Treturn)CallMethod<Ttarget>(methodName, target, []);
         }
 
         public static Treturn CallMethod<Ttarget, Treturn>(string methodName, object target, object[] args) where Treturn : class
         {
-            return CastTo<Treturn>(CallMethod<Ttarget>(methodName, target, args));
+            return (Treturn)CallMethod<Ttarget>(methodName, target, args);
         }
 
         public static Treturn CallMethod<Ttarget, Treturn>(string methodName, Type[] argTypes, object target, object[] args) where Treturn : class
         {
-            return CastTo<Treturn>(CallMethod<Ttarget>(methodName, argTypes, target, args));
+            return (Treturn)CallMethod<Ttarget>(methodName, argTypes, target, args);
         }
 
         public static object CallMethod<Ttarget>(string methodName, object target)
@@ -177,6 +180,8 @@ namespace AutoRestock
             return AccessTools.Method(typeof(Ttarget), methodName, argTypes).Invoke(target, args);
         }
 
+        // In Mono, just do a regular cast that returns default (usually null) on failure.
+#if MONO_BUILD
         public static T CastTo<T>(object o)
         {
             if (o is T)
@@ -188,25 +193,46 @@ namespace AutoRestock
                 return default(T);
             }
         }
-
-        public static bool Is<T>(object o)
-        {
-#if MONO_BUILD
-            return o is T;
 #else
-            return typeof(T).IsAssignableFrom(GetType(o));
-#endif
-        }
-
-#if !MONO_BUILD
+        // In Il2Cpp, type check against object identity before performing a blind cast.
         public static T CastTo<T>(Il2CppObjectBase o) where T : Il2CppObjectBase
         {
-            return o.TryCast<T>();
+            if (typeof(T).IsAssignableFrom(GetType(o)))
+            {
+                return (T)System.Activator.CreateInstance(typeof(T), [((Il2CppObjectBase)o).Pointer]);
+            }
+            return default(T);
         }
+#endif
 
-        public static bool Is<T>(Il2CppObjectBase o) where T : Il2CppObjectBase
+        // Under Il2Cpp, "is" operator only looks at local scope for
+        // type info, instead of checking object identity. 
+        // Check against actual object type obtained via GetType.
+#if MONO_BUILD
+        public static bool Is<T>(object o)
         {
-            return o.TryCast<T>() != null;
+            return o is T;
+        }
+#else
+        public static bool Is<T>(Il2CppObjectBase o)
+        {
+            return typeof(T).IsAssignableFrom(GetType(o));
+        }
+#endif
+
+        // In Mono, perform a regular cast.
+#if MONO_BUILD
+        public static T ToInterface<T>(object o)
+        {
+            return (T)o;
+        }
+#else
+        // You can't do a standard cast to or from an interface type in IL2CPP, since interface info is stripped.
+        // Use this method to perform a blind cast without type checking.
+        // Use carefully.
+        public static T ToInterface<T>(Il2CppObjectBase o) where T : Il2CppObjectBase
+        {
+            return (T)System.Activator.CreateInstance(typeof(T), [((Il2CppObjectBase)o).Pointer]);
         }
 #endif
 
@@ -228,61 +254,23 @@ namespace AutoRestock
 #endif
         }
 
+#if MONO_BUILD
         public static Type GetType(object o)
         {
             if (o == null)
             {
                 return null;
             }
-#if !MONO_BUILD
-            if (o is Il2CppObjectBase)
-            {
-                return GetType((Il2CppObjectBase)o);
-            }
-#endif
             return o.GetType();
         }
-
-#if !MONO_BUILD
+#else
         public static Type GetType(Il2CppObjectBase o)
         {
             string typeName = Il2CppType.TypeFromPointer(o.ObjectClass).FullName;
-            Assembly S1Assembly = AppDomain.CurrentDomain.GetAssemblies().First((Assembly a) => a.GetName().Name == "Assembly-CSharp");
             return S1Assembly.GetType($"Il2Cpp{typeName}");
         }
 #endif
 
-#if MONO_BUILD
-        public static T ToInterface<T>(object o)
-        {
-            return (T)o;
-        }
-
-        public static T ToType<T>(object o)
-        {
-            return (T)o;
-        }
-#else
-        // You can't cast to or from an interface type in IL2CPP, since interface info is stripped.
-        // Use these methods to convert.
-        public static T ToInterface<T>(object o) where T : Il2CppObjectBase
-        {
-            if (o is Il2CppObjectBase)
-            {
-                return CastTo<T>(System.Activator.CreateInstance(typeof(T), [((Il2CppObjectBase)o).Pointer]));
-            }
-            return (T)o;
-        }
-
-        public static T ToType<T>(object o) where T : Il2CppObjectBase
-        {
-            if (o is Il2CppObjectBase)
-            {
-                return CastTo<T>(System.Activator.CreateInstance(typeof(T), [((Il2CppObjectBase)o).Pointer]));
-            }
-            return (T)o;
-        }
-#endif
 
         // Compare unity objects by their instance ID
         public class UnityObjectComparer : IEqualityComparer<UnityEngine.Object>
@@ -301,7 +289,7 @@ namespace AutoRestock
         public static bool IsQualityIngredient(string itemID)
         {
             List<string> qualityIngredients = ["pseudo"];
-            return qualityIngredients.Aggregate<string, bool>(false, (bool accum, string name) => accum || itemID.Contains(name));
+            return qualityIngredients.Any((id) => itemID.Contains(id));
         }
 
         public static StorableItemInstance GetItemInstance(string itemID, EQuality quality = EQuality.Standard)
@@ -337,26 +325,53 @@ namespace AutoRestock
             return new QualityItemInstance(Registry.GetItem(qualityItemID), 1, quality);
         }
 
-        public static bool IsStorageRack(object obj)
+        public static bool IsStorageRack(ITransitEntity transitEntity)
         {
-            List<string> shelves = ["Safe", "Small Storage Rack", "Medium Storage Rack", "Large Storage Rack", "StorageRack"];
-            if (obj != null && Utils.Is<StorageEntity>(obj))
+            if (transitEntity != null && Utils.Is<PlaceableStorageEntity>(transitEntity))
             {
-                // Regular cast won't always work here in IL2CPP, since interface info is stripped,
-                // and we expect to see a fair number of IItemSlotOwners.
-                // Use ToInterface and ToType to convert to/from interfaces.
-                string objName = Utils.ToType<StorageEntity>(obj).StorageEntityName;
-                return shelves.Aggregate<string, bool>(false, (bool accum, string name) => accum || objName.Contains(name));
+                StorageEntity storageEntity = Utils.CastTo<PlaceableStorageEntity>(transitEntity).StorageEntity;
+                return IsStorageRack(storageEntity);
             }
             return false;
         }
 
-        public static bool IsStation(object obj)
+        public static bool IsStorageRack(IItemSlotOwner slotOwner)
+        {
+            if (slotOwner != null && Utils.Is<StorageEntity>(slotOwner))
+            {
+                StorageEntity storageEntity = Utils.CastTo<StorageEntity>(slotOwner);
+                return IsStorageRack(storageEntity);
+            }
+            return false;
+        }
+
+        public static bool IsStorageRack(StorageEntity entity)
+        {
+            List<string> shelves = ["Safe", "Small Storage Rack", "Medium Storage Rack", "Large Storage Rack", "StorageRack"];
+            if (entity != null)
+            {
+                string objName = entity.StorageEntityName;
+                return shelves.Any((name) => objName.Contains(name));
+            }
+            return false;
+        }
+
+        public static bool IsStation(IItemSlotOwner slotOwner)
+        {
+            if (slotOwner != null && Utils.Is<GridItem>(slotOwner))
+            {
+                GridItem gridItem = Utils.CastTo<GridItem>(slotOwner);
+                return IsStation(gridItem);
+            }
+            return false;
+        }
+
+        public static bool IsStation(GridItem gridItem)
         {
             List<Type> stationTypes = [typeof(PackagingStation), typeof(Cauldron), typeof(ChemistryStation), typeof(MixingStation), typeof(MushroomSpawnStation)];
-            if (obj != null && Utils.Is<GridItem>(obj))
+            if (gridItem != null)
             {
-                Type ownerType = Utils.GetType(obj);
+                Type ownerType = Utils.GetType(gridItem);
                 return stationTypes.FirstOrDefault<Type>((Type t) => t.IsAssignableFrom(ownerType)) != null;
             }
             return false;
@@ -412,8 +427,8 @@ namespace AutoRestock
                 this.type = type;
             }
         }
-        
-        public static Dictionary<ItemSlot, NPC> shelfAccessors;
+
+        public static ItemSlot playerAccessedSlot;
         public static MelonPreferences_Category melonPrefs;
         private static TimeManager timeManager;
         private static MoneyManager moneyManager;
@@ -422,7 +437,6 @@ namespace AutoRestock
         private static string transactionString;
         private static List<Transaction> ledger;
         private static Dictionary<Transaction, object> coroutines;
-        private static NPC lockOwner;
         private static EDay ledgerDay;
         private static Mutex exclusiveLock;
         public static bool isInitialized = false;
@@ -445,13 +459,11 @@ namespace AutoRestock
             }
             else
             {
-                Utils.Warn($"Couldn't serialize itemslot!");
+                Utils.Warn($"Couldn't serialize itemslot--not station or storage rack? ({Utils.GetType(slot.SlotOwner)})");
                 return null;
             }
 
             string property = gridItem.ParentProperty.name;
-
-            // Fix: use _originCoordinate instead of OriginCoordinate
             Vector2 coordinate = (Vector2)Utils.GetField<GridItem>("_originCoordinate", gridItem);
             return new SlotIdentifier(property, coordinate, (int)Utils.GetProperty<ItemSlot>("SlotIndex", slot), type);
         }
@@ -465,24 +477,30 @@ namespace AutoRestock
                 Property property = properties.FirstOrDefault<Property>((Property p) => p.name == identifier.property);
                 List<GridItem> gridItemsOnProperty = gridItems.FindAll((GridItem g) => g.ParentProperty == property);
 
-                // FIXED: Use _originCoordinate instead of OriginCoordinate
                 Vector2 targetCoord = new Vector2(identifier.gridLocation[0], identifier.gridLocation[1]);
-                GridItem gridItem = gridItemsOnProperty.Single<GridItem>((GridItem g) => 
+                GridItem gridItem = gridItemsOnProperty.FirstOrDefault<GridItem>((GridItem g) =>
                     (Vector2)Utils.GetField<GridItem>("_originCoordinate", g) == targetCoord
                 );
+                if (gridItem == null)
+                {
+                    Utils.Warn($"Couldn't deserialize slot--coordinates did not map to a griditem");
+                    return null;
 
-                IItemSlotOwner slotOwner = null;
+                }
+
+                IItemSlotOwner slotOwner;
                 if (Utils.IsStation(gridItem))
                 {
                     slotOwner = Utils.ToInterface<IItemSlotOwner>(gridItem);
                 }
                 else if (Utils.Is<PlaceableStorageEntity>(gridItem))
                 {
-                    slotOwner = Utils.ToInterface<IItemSlotOwner>(Utils.CastTo<PlaceableStorageEntity>(gridItem).StorageEntity);
+                    StorageEntity storageEntity = Utils.CastTo<PlaceableStorageEntity>(gridItem).StorageEntity;
+                    slotOwner = Utils.ToInterface<IItemSlotOwner>(storageEntity);
                 }
                 else
                 {
-                    Utils.Warn($"couldn't deserialize slot--obj was not a station or placeablestorageentity");
+                    Utils.Warn($"couldn't deserialize slot--obj was not a station or placeablestorageentity ({Utils.GetType(gridItem)})");
                     return null;
                 }
 
@@ -508,7 +526,7 @@ namespace AutoRestock
                         Utils.Warn($"Couldn't deserialize slot!");
                         continue;
                     }
-                    StorableItemInstance item = new StorableItemInstance(Registry.GetItem(transaction.itemID), 1);
+                    StorableItemInstance item = Utils.GetItemInstance(transaction.itemID);
                     TryRestocking(slot, item, transaction.quantity);
                 }
             }
@@ -529,10 +547,9 @@ namespace AutoRestock
 
                 ledgerDay = timeManager.CurrentDay;
 
-                shelfAccessors = new Dictionary<ItemSlot, NPC>();
+                playerAccessedSlot = null;
                 coroutines = new Dictionary<Transaction, object>();
 
-                lockOwner = UnityEngine.Object.FindObjectsOfType<NPC>().FirstOrDefault((NPC npc) => npc.ID == "oscar_holland");
                 exclusiveLock = new Mutex();
 
                 timeManager.onDayPass += new Action(Manager.OnDayPass);
@@ -582,7 +599,6 @@ namespace AutoRestock
                 isInitialized = false;
                 ledger.Clear();
                 StopCoroutines();
-                lockOwner = null;
                 exclusiveLock.Dispose();
             }
         }
@@ -642,8 +658,7 @@ namespace AutoRestock
                 bool useCash = melonPrefs.GetEntry<bool>("payWithCash").Value;
                 bool useDebt = melonPrefs.GetEntry<bool>("useDebt").Value;
                 SlotIdentifier slotID = SerializeSlot(slot);
-                //Utils.Debug($"Trying to restock {quantity}x {item.ID} at {slotID.property}, grid location ({slotID.gridLocation[0]},{slotID.gridLocation[1]}");
-                
+
                 try
                 {
                     if ((item.StackLimit == 0))
@@ -682,32 +697,6 @@ namespace AutoRestock
             {
                 Utils.Log($"Tried to restock item, but Manager was not initialized!");
             }
-
-        }
-
-        public static bool OwnedByNPC(ItemSlot slot)
-        {
-            if (isInitialized) 
-            {
-                IUsable usable = null;
-                if (Utils.IsStation(slot.SlotOwner))
-                {
-                    usable = Utils.ToInterface<IUsable>(slot.SlotOwner);
-                }
-                else if (Utils.IsStorageRack(slot.SlotOwner))
-                {
-                    PlaceableStorageEntity placeable = Utils.CastTo<StorageEntity>(slot.SlotOwner).GetComponent<PlaceableStorageEntity>();
-                    usable = Utils.ToInterface<IUsable>(placeable);
-                }
-
-                if (usable == null)
-                {
-                    Utils.Warn($"Couldn't convert itemslotowner to iusable");
-                    return false;
-                }
-                return usable.NPCUserObject != null;
-            }
-            return false;
         }
 
         private static IEnumerator RestockCoroutine(ItemSlot slot, StorableItemInstance item, Transaction transaction)
@@ -749,8 +738,8 @@ namespace AutoRestock
             if (isInitialized && InstanceFinder.IsServer)
             {
                 NetworkSingleton<MessagingManager>.Instance.SendMessage(
-                    new Message(GetReceipt(), Message.ESenderType.Other, true, -1), 
-                    true, 
+                    new Message(GetReceipt(), Message.ESenderType.Other, true, -1),
+                    true,
                     "oscar_holland");
 
                 ledger.Clear();
@@ -939,23 +928,23 @@ namespace AutoRestock
     {
         [HarmonyPatch(typeof(MixingStation), "SendMixingOperation")]
         [HarmonyPrefix]
-        public static bool SendMixingOperationPrefix(MixingStation __instance, MixOperation operation)
+        public static void SendMixingOperationPrefix(MixingStation __instance, MixOperation operation)
         {
             if (!InstanceFinder.IsServer || !Manager.isInitialized)
             {
-                return true;
+                return;
             }
 
             try
             {
                 if (!Manager.melonPrefs.GetEntry<bool>("enableMixingStations").Value)
                 {
-                    return true;
+                    return;
                 }
                 float threshold = Utils.GetProperty<MixingStation, MixingStationConfiguration>("stationConfiguration", __instance).StartThrehold.GetData().Value;
                 if ((__instance.MixerSlot.Quantity - operation.Quantity) >= threshold)
                 {
-                    return true;
+                    return;
                 }
                 if (Manager.melonPrefs.GetEntry<bool>("playerRestockStations").Value || __instance.PlayerUserObject == null)
                 {
@@ -968,7 +957,7 @@ namespace AutoRestock
                 Utils.Warn($"{MethodBase.GetCurrentMethod().DeclaringType.Name}:");
                 Utils.PrintException(e);
             }
-            return true;
+            return;
         }
     }
 
@@ -977,22 +966,22 @@ namespace AutoRestock
     {
         [HarmonyPatch(typeof(PackagingStation), "PackSingleInstance")]
         [HarmonyPrefix]
-        public static bool PackSingleInstancePrefix(PackagingStation __instance)
+        public static void PackSingleInstancePrefix(PackagingStation __instance)
         {
             if (!InstanceFinder.IsServer || !Manager.isInitialized)
             {
-                return true;
+                return;
             }
 
             try
             {
                 if (!Manager.melonPrefs.GetEntry<bool>("enablePackagingStations").Value)
                 {
-                    return true;
+                    return;
                 }
                 if (__instance.PackagingSlot.ItemInstance == null || __instance.PackagingSlot.ItemInstance.Quantity > 1)
                 {
-                    return true;
+                    return;
                 }
                 if (Manager.melonPrefs.GetEntry<bool>("playerRestockStations").Value || __instance.PlayerUserObject == null)
                 {
@@ -1005,20 +994,20 @@ namespace AutoRestock
                 Utils.Warn($"{MethodBase.GetCurrentMethod().DeclaringType.Name}:");
                 Utils.PrintException(e);
             }
-            return true;
+            return;
         }
     }
 
     [HarmonyPatch]
     public class ChemistryStationPatches
     {
-        static List<List<T>> Permute<T>(List<T> nums)
+        private static List<List<T>> Permute<T>(List<T> nums)
         {
             var list = new List<List<T>>();
             return DoPermute<T>(nums, 0, nums.Count - 1, list);
         }
 
-        static List<List<T>> DoPermute<T>(List<T> nums, int start, int end, List<List<T>> list)
+        private static List<List<T>> DoPermute<T>(List<T> nums, int start, int end, List<List<T>> list)
         {
             if (start == end)
             {
@@ -1037,7 +1026,7 @@ namespace AutoRestock
             return list;
         }
 
-        static void Swap<T>(List<T> list, int index1, int index2)
+        private static void Swap<T>(List<T> list, int index1, int index2)
         {
             T item = list[index1];
             list[index1] = list[index2];
@@ -1062,21 +1051,13 @@ namespace AutoRestock
                 if (Manager.melonPrefs.GetEntry<bool>("playerRestockStations").Value ||
                     __instance.PlayerUserObject == null)
                 {
-                    // this should really be done with a map operation, but il2cpp ienumerable methods only accept intptrs
-                    // oh well. time to iterate
+                    // See what ingredients we're missing
                     List<ItemDefinition> missingIngredients = new List<ItemDefinition>();
                     foreach (StationRecipe.IngredientQuantity i in op.Recipe.Ingredients)
                     {
-                        bool isPresent = false;
-                        foreach (ItemSlot slot in __instance.IngredientSlots)
-                        {
-                            if (slot.ItemInstance != null && slot.ItemInstance.Definition.Name.Contains(i.Item.Name))
-                            {
-                                isPresent = true;
-                                break;
-                            }
-                        }
-                        if (!isPresent)
+                        if (!__instance.IngredientSlots.Any<ItemSlot>((ItemSlot slot) =>
+                            slot.ItemInstance != null && slot.ItemInstance.Definition.Name.Contains(i.Item.Name)
+                        ))
                         {
                             missingIngredients.Add(i.Item);
                         }
@@ -1098,7 +1079,7 @@ namespace AutoRestock
                         }
 
                         // now generate the mappings
-                        // With three slots, we only have 3->6 possibilities max, so just permute
+                        // With three slots, we only have 6 possibilities max, so just permute
                         possibleMappings = Permute<ItemDefinition>(missingIngredients);
 
                         // now find valid mappings
@@ -1122,7 +1103,10 @@ namespace AutoRestock
 
                         if (validMappings.Count == 0)
                         {
-                            Utils.Log($"Couldn't restock chemistry station because items do not agree with filters.");
+                            string property = __instance.ParentProperty.name;
+                            Vector2 coordinate = (Vector2)Utils.GetField<GridItem>("_originCoordinate", __instance);
+                            Utils.Log($"Couldn't restock {__instance.GetManagementName()} at {property}({coordinate.x}, {coordinate.y}) because items do not agree with filters.");
+                            return true;
                         }
                     }
 
@@ -1147,7 +1131,7 @@ namespace AutoRestock
                                     break;
                                 }
                             }
-                            
+
                             if (quantity > 0 && slot.ItemInstance.Quantity < quantity)
                             {
                                 StorableItemInstance newItem = Utils.CastTo<StorableItemInstance>(slot.ItemInstance.GetCopy(1));
@@ -1166,68 +1150,50 @@ namespace AutoRestock
         }
     }
 
+
     [HarmonyPatch]
     public class StorageEntityPatches
     {
-        [HarmonyPatch(typeof(MoveItemBehaviour), "TakeItem")]
+        // Keep track of player-initiated itemslot changes.
+        [HarmonyPatch(typeof(ItemUIManager), "Update")]
         [HarmonyPrefix]
-        public static void TakeItemPrefix(MoveItemBehaviour __instance)
+        public static void UpdatePrefix(ItemUIManager __instance)
         {
-            if (!InstanceFinder.IsServer || !Manager.isInitialized)
+            if (__instance.DraggingEnabled)
             {
-                return;
-            }
-
-            try
-            {
-                if ((int)Utils.CallMethod<MoveItemBehaviour>("GetAmountToGrab", __instance) > 0)
+                // Did we just start a drag?
+                ItemSlotUI hoveredSlot = Utils.CallMethod<ItemUIManager, ItemSlotUI>("GetHoveredItemSlot", __instance);
+                ItemSlotUI draggedSlot = Utils.GetField<ItemUIManager, ItemSlotUI>("draggedSlot", __instance);
+                if (draggedSlot == null && hoveredSlot != null &&
+                    (GameInput.GetButtonDown(GameInput.ButtonCode.PrimaryClick) ||
+                     GameInput.GetButtonDown(GameInput.ButtonCode.SecondaryClick) ||
+                     GameInput.GetButtonDown(GameInput.ButtonCode.TertiaryClick)) &&
+                     Manager.playerAccessedSlot == null)
                 {
-                    TransitRoute route = Utils.GetField<MoveItemBehaviour, TransitRoute>("assignedRoute", __instance);
-                    ItemInstance template = Utils.GetField<MoveItemBehaviour, ItemInstance>("itemToRetrieveTemplate", __instance);
-                    ItemSlot slot = route.Source.GetFirstSlotContainingTemplateItem(template, ITransitEntity.ESlotType.Both);
-                    if (slot != null && slot.SlotOwner != null && Utils.IsStorageRack(slot.SlotOwner))
-                    {
-                        if (!Manager.shelfAccessors.TryAdd(slot, __instance.Npc))
-                        {
-                            Utils.Warn($"ItemSlot is already in list of shelfAccessors?");
-                        }
-                    }
+                    Manager.playerAccessedSlot = hoveredSlot.assignedSlot;
                 }
-            }
-            catch (Exception e)
-            {
-                Utils.PrintException(e);
             }
         }
 
-        [HarmonyPatch(typeof(MoveItemBehaviour), "TakeItem")]
+        [HarmonyPatch(typeof(ItemUIManager), "Update")]
         [HarmonyPostfix]
-        public static void TakeItemPostfix(MoveItemBehaviour __instance)
+        public static void UpdatePostfix(ItemUIManager __instance)
         {
-            if (!InstanceFinder.IsServer || !Manager.isInitialized) 
+            if (__instance.DraggingEnabled)
             {
-                return;
-            }
-
-            try
-            {
-                TransitRoute route = Utils.GetField<MoveItemBehaviour, TransitRoute>("assignedRoute", __instance);
-                ItemInstance template = Utils.GetField<MoveItemBehaviour, ItemInstance>("itemToRetrieveTemplate", __instance);
-                ItemSlot slot = route.Source.GetFirstSlotContainingTemplateItem(template, ITransitEntity.ESlotType.Both);
-                if (slot != null)
+                // Did we just end a drag?
+                ItemSlotUI draggedSlot = Utils.GetField<ItemUIManager, ItemSlotUI>("draggedSlot", __instance);
+                if (draggedSlot == null && Manager.playerAccessedSlot != null)
                 {
-                    Manager.shelfAccessors.Remove(slot);
+                    Manager.playerAccessedSlot = null;
                 }
-            }
-            catch (Exception e)
-            {
-                Utils.PrintException(e);
             }
         }
 
-        [HarmonyPatch(typeof(StorageEntity), "SetStoredInstance")]
+        // Only restock when a non-player has depleted the item slot.
+        [HarmonyPatch(typeof(ItemSlot), "ChangeQuantity")]
         [HarmonyPrefix]
-        public static void SetStoredInstancePrefix(StorageEntity __instance, int itemSlotIndex, ItemInstance instance)
+        public static void ChangeQuantityPrefix(ItemSlot __instance, ref int change)
         {
             if (!InstanceFinder.IsServer || !Manager.isInitialized)
             {
@@ -1240,26 +1206,23 @@ namespace AutoRestock
                 {
                     return;
                 }
-                if (instance != null || !Utils.IsStorageRack(__instance))
+                if (__instance.ItemInstance == null || (__instance.Quantity + change > 0))
                 {
                     return;
                 }
-                ItemSlot slot = __instance.ItemSlots.ToArray()[itemSlotIndex];
-                if (slot.ItemInstance == null)
+                // TODO: investigate if we can just use this patch and scrap all station-specific ones
+                if (!Utils.IsStorageRack(__instance.SlotOwner))
                 {
                     return;
                 }
-                // is a player looking into the shelf?
-                if (__instance.CurrentPlayerAccessor != null)
+
+                // if this was a player-initiated action, don't restock.
+                if (Manager.playerAccessedSlot == __instance)
                 {
-                    // is the current slot being accessed by an NPC?
-                    if (!Manager.shelfAccessors.ContainsKey(slot))
-                    {
-                        return;
-                    }
+                    return;
                 }
-                StorableItemInstance newItem = Utils.CastTo<StorableItemInstance>(slot.ItemInstance.GetCopy(1));
-                Manager.TryRestocking(slot, newItem, newItem.StackLimit);
+                StorableItemInstance newItem = Utils.CastTo<StorableItemInstance>(__instance.ItemInstance.GetCopy(1));
+                Manager.TryRestocking(__instance, newItem, newItem.StackLimit);
             }
             catch (Exception e)
             {
@@ -1289,8 +1252,6 @@ namespace AutoRestock
             }
         }
 
-        // This needs to be a prefix for compatibility with ProduceMore.
-        // The main function body is expected to throw an exception, so postfixes won't run.
         [HarmonyPatch(typeof(UseSpawnStationBehaviour), "StopWork")]
         [HarmonyPrefix]
         public static void StopWorkPrefix(UseSpawnStationBehaviour __instance)

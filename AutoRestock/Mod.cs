@@ -1,7 +1,7 @@
 ﻿using MelonLoader;
 using System.Reflection;
 
-[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.6", "lasersquid", null)]
+[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.7", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace AutoRestock
@@ -9,23 +9,13 @@ namespace AutoRestock
     public class AutoRestockMod : MelonMod
     {
         public MelonPreferences_Category melonPrefs;
-        private bool prefsInitialized = false;
         public HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("com.lasersquid.autorestock");
 
         public override void OnInitializeMelon()
         {
             CreateMelonPreferences();
-            Utils.SetMod(this);
+            Utils.Initialize(this);
             LoggerInstance.Msg("Mod initialized.");
-        }
-
-        public override void OnPreferencesSaved()
-        {
-            base.OnPreferencesSaved();
-            if (prefsInitialized)
-            {
-                melonPrefs.LoadFromFile(false);
-            }
         }
 
         private void CreateMelonPreferences()
@@ -47,23 +37,7 @@ namespace AutoRestock
             melonPrefs.CreateEntry<bool>("debugLogs", false, "Print debug logs", "Print debug logs");
 
             melonPrefs.SaveToFile(false);
-            prefsInitialized = true;
         }
-    }
-
-    // Compare unity objects by their instance ID
-    public class UnityObjectComparer : IEqualityComparer<UnityEngine.Object>
-    {
-        public bool Equals(UnityEngine.Object a, UnityEngine.Object b)
-        {
-            return a.GetInstanceID() == b.GetInstanceID();
-        }
-
-        public int GetHashCode(UnityEngine.Object item)
-        {
-            return item.GetInstanceID();
-        }
-
     }
 }
 
@@ -95,4 +69,9 @@ namespace AutoRestock
 //  - genericize utils methods - done
 //  - add spawn station patches - done (v1.0.5)
 //  - use getfield instead of getproperty for griditem._origincoordinate - done (v1.0.6)
+//  - fix settings not being changeable at runtime - done
+//  - clean up utils type conversion/checking functions - done
+//  - fix bug where storageracks would sometimes not restock if a player was looking into them - done
+//  - fix bug where dryingrack speed is disregarded - done
+//  - investigate whether the ItemSlot.ChangeQuantity patch can replace station-specific patches
 
