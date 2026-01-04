@@ -64,7 +64,9 @@ namespace AutoRestock
         public static void Initialize(AutoRestockMod mod)
         {
             Mod = mod;
+#if !MONO_BUILD
             S1Assembly = AppDomain.CurrentDomain.GetAssemblies().First((Assembly a) => a.GetName().Name == "Assembly-CSharp");
+#endif
         }
 
         public static void PrintException(Exception e)
@@ -236,6 +238,22 @@ namespace AutoRestock
         }
 #endif
 
+#if MONO_BUILD
+        public static Type GetType(object o)
+        {
+            if (o == null)
+            {
+                return null;
+            }
+            return o.GetType();
+        }
+#else
+        public static Type GetType(Il2CppObjectBase o)
+        {
+            string typeName = Il2CppType.TypeFromPointer(o.ObjectClass).FullName;
+            return S1Assembly.GetType($"Il2Cpp{typeName}");
+        }
+#endif
         public static UnityAction ToUnityAction(Action action)
         {
 #if MONO_BUILD
@@ -254,22 +272,6 @@ namespace AutoRestock
 #endif
         }
 
-#if MONO_BUILD
-        public static Type GetType(object o)
-        {
-            if (o == null)
-            {
-                return null;
-            }
-            return o.GetType();
-        }
-#else
-        public static Type GetType(Il2CppObjectBase o)
-        {
-            string typeName = Il2CppType.TypeFromPointer(o.ObjectClass).FullName;
-            return S1Assembly.GetType($"Il2Cpp{typeName}");
-        }
-#endif
 
 
         // Compare unity objects by their instance ID
@@ -298,7 +300,7 @@ namespace AutoRestock
             {
                 return GetQualityItemInstance(itemID, quality);
             }
-            return new StorableItemInstance(Registry.GetItem(itemID), 1);
+            return Utils.CastTo<StorableItemInstance>(Registry.GetItem(itemID).GetDefaultInstance());
         }
 
         public static QualityItemInstance GetQualityItemInstance(string itemID, EQuality quality)
@@ -322,7 +324,7 @@ namespace AutoRestock
                 Utils.Warn($"itemid {itemID} is not a quality ingredient?");
                 return null;
             }
-            return new QualityItemInstance(Registry.GetItem(qualityItemID), 1, quality);
+            return Utils.CastTo<QualityItemInstance>(Registry.GetItem(qualityItemID).GetDefaultInstance());
         }
 
         public static bool IsStorageRack(ITransitEntity transitEntity)
@@ -356,6 +358,17 @@ namespace AutoRestock
             return false;
         }
 
+        public static bool IsStation(ITransitEntity transitEntity)
+        {
+            if (transitEntity != null && Utils.Is<GridItem>(transitEntity))
+            {
+                GridItem gridItem = Utils.CastTo<GridItem>(transitEntity);
+                return IsStation(gridItem);
+            }
+            return false;
+
+        }
+
         public static bool IsStation(IItemSlotOwner slotOwner)
         {
             if (slotOwner != null && Utils.Is<GridItem>(slotOwner))
@@ -368,11 +381,11 @@ namespace AutoRestock
 
         public static bool IsStation(GridItem gridItem)
         {
-            List<Type> stationTypes = [typeof(PackagingStation), typeof(Cauldron), typeof(ChemistryStation), typeof(MixingStation), typeof(MushroomSpawnStation)];
+            List<Type> stationTypes = [typeof(PackagingStation), typeof(Cauldron), typeof(ChemistryStation), typeof(MixingStation), typeof(MushroomSpawnStation), typeof(LabOven), typeof(DryingRack)];
             if (gridItem != null)
             {
                 Type ownerType = Utils.GetType(gridItem);
-                return stationTypes.FirstOrDefault<Type>((Type t) => t.IsAssignableFrom(ownerType)) != null;
+                return stationTypes.Any((t) => t.IsAssignableFrom(ownerType));
             }
             return false;
         }
@@ -428,11 +441,13 @@ namespace AutoRestock
             }
         }
 
-        public static ItemSlot playerAccessedSlot;
+        public static ItemSlot playerClickedSlot;
+        public static List<ItemSlot> playerStationOperationSlots;
         public static MelonPreferences_Category melonPrefs;
         private static TimeManager timeManager;
         private static MoneyManager moneyManager;
         private static SaveManager saveManager;
+        private static NPC oscar;
         private static string ledgerString;
         private static string transactionString;
         private static List<Transaction> ledger;
@@ -485,7 +500,6 @@ namespace AutoRestock
                 {
                     Utils.Warn($"Couldn't deserialize slot--coordinates did not map to a griditem");
                     return null;
-
                 }
 
                 IItemSlotOwner slotOwner;
@@ -546,8 +560,10 @@ namespace AutoRestock
                 saveManager = SaveManager.Instance;
 
                 ledgerDay = timeManager.CurrentDay;
+                oscar = UnityEngine.Object.FindObjectsOfType<NPC>(true).FirstOrDefault((npc) => npc.ID == "oscar_holland");
 
-                playerAccessedSlot = null;
+                playerClickedSlot = null;
+                playerStationOperationSlots = new List<ItemSlot>();
                 coroutines = new Dictionary<Transaction, object>();
 
                 exclusiveLock = new Mutex();
@@ -652,9 +668,9 @@ namespace AutoRestock
             if (isInitialized && InstanceFinder.IsServer)
             {
                 string itemID = item.ID;
-                float discount = Mathf.Clamp(melonPrefs.GetEntry<float>("itemDiscount").Value, 0f, 1f);
+                float discount = Mathf.Clamp01(melonPrefs.GetEntry<float>("itemDiscount").Value);
                 float unitPrice = item.GetMonetaryValue() * 2f / (float)item.Quantity;
-                float totalCost = unitPrice * quantity * (1f - discount);
+                float totalCost = unitPrice * (float)quantity * (1f - discount);
                 bool useCash = melonPrefs.GetEntry<bool>("payWithCash").Value;
                 bool useDebt = melonPrefs.GetEntry<bool>("useDebt").Value;
                 SlotIdentifier slotID = SerializeSlot(slot);
@@ -701,32 +717,58 @@ namespace AutoRestock
 
         private static IEnumerator RestockCoroutine(ItemSlot slot, StorableItemInstance item, Transaction transaction)
         {
-            slot.SetIsRemovalLocked(true);
+            // Don't clear slot and apply lock right away; some S1 methods rely on that slot being populated
+            // after TryRestock is called.
+            // Give those methods a chance to complete before locking.
+            yield return new WaitForEndOfFrame();
+
+            slot.ClearStoredInstance();
+            slot.ApplyLock(oscar.NetworkObject, "Restocking item", false);
+            slot.SetIsAddLocked(true);
             yield return new WaitForSeconds(1f);
 
             Utils.VerboseLog($"Restocking {item.Name} (${transaction.unitPrice}) x{transaction.quantity} at {transaction.slotID.property}. Total: ${transaction.totalCost}.");
-            if (transaction.quantity > 0)
+
+            bool useDebt = melonPrefs.GetEntry<bool>("useDebt").Value;
+            bool didPay = false;
+            if (transaction.totalCost <= 0f)
+            {
+                Utils.VerboseLog($"Total cost of transaction is $0. Get a freebie!");
+                didPay = true;
+            }
+            else
+            {
+                bool payWithCash = melonPrefs.GetEntry<bool>("payWithCash").Value;
+                float balance = payWithCash ? moneyManager.cashBalance : moneyManager.onlineBalance;
+                if (balance < transaction.totalCost && !useDebt)
+                {
+                    Utils.Log($"Insufficient balance to restock {item.Name} (${transaction.unitPrice}) x{transaction.quantity} at {transaction.slotID.property}, total ${transaction.totalCost}; aborting.");
+                }
+                else
+                {
+                    if (payWithCash)
+                    {
+                        moneyManager.ChangeCashBalance(-transaction.totalCost);
+                    }
+                    else
+                    {
+                        moneyManager.CreateOnlineTransaction("Restock", -transaction.totalCost, 1f, $"{item.Definition.Name}");
+                    }
+                    didPay = true;
+                }
+            }
+
+            // Tyler. This is not how you implement a lock.
+            // You let the person acquire the lock, modify the protected value, then release the lock.
+            // You don't release the lock immediately before modifying the protected value.
+            slot.SetIsAddLocked(false);
+            slot.RemoveLock();
+            if (didPay && transaction.quantity > 0)
             {
                 item.SetQuantity(transaction.quantity - slot.Quantity);
                 slot.AddItem(item);
             }
-            slot.SetIsRemovalLocked(false);
 
-            if (transaction.totalCost <= 0f)
-            {
-                Utils.VerboseLog($"Total cost of transaction is $0. Get a freebie!");
-            }
-            else
-            {
-                if (melonPrefs.GetEntry<bool>("payWithCash").Value)
-                {
-                    moneyManager.ChangeCashBalance(-transaction.totalCost);
-                }
-                else
-                {
-                    moneyManager.CreateOnlineTransaction("Restock", -transaction.totalCost, 1f, $"{item.Definition.Name}");
-                }
-            }
             Manager.AcquireMutex();
             Manager.coroutines.Remove(transaction);
             Manager.ReleaseMutex();
@@ -740,7 +782,7 @@ namespace AutoRestock
                 NetworkSingleton<MessagingManager>.Instance.SendMessage(
                     new Message(GetReceipt(), Message.ESenderType.Other, true, -1),
                     true,
-                    "oscar_holland");
+                    oscar.ID);
 
                 ledger.Clear();
                 ledgerDay = timeManager.CurrentDay;
@@ -890,27 +932,27 @@ namespace AutoRestock
     {
         [HarmonyPatch(typeof(Cauldron), "RemoveIngredients")]
         [HarmonyPrefix]
-        public static bool RemoveIngredientsPrefix(Cauldron __instance)
+        public static void RemoveIngredientsPrefix(Cauldron __instance)
         {
             if (!InstanceFinder.IsServer || !Manager.isInitialized)
             {
-                return true;
+                return;
             }
 
             try
             {
                 if (!Manager.melonPrefs.GetEntry<bool>("enableCauldrons").Value)
                 {
-                    return true;
+                    return;
                 }
                 if (__instance.LiquidSlot.ItemInstance.Quantity > 1)
                 {
-                    return true;
+                    return;
                 }
                 if (Manager.melonPrefs.GetEntry<bool>("playerRestockStations").Value ||
                     __instance.PlayerUserObject == null)
                 {
-                    StorableItemInstance newItem = Utils.CastTo<StorableItemInstance>(__instance.LiquidSlot.ItemInstance.GetCopy(1));
+                    StorableItemInstance newItem = Utils.CastTo<StorableItemInstance>(__instance.LiquidSlot.ItemInstance.GetCopy());
                     Manager.TryRestocking(__instance.LiquidSlot, newItem, newItem.StackLimit);
                 }
             }
@@ -919,7 +961,7 @@ namespace AutoRestock
                 Utils.Warn($"{MethodBase.GetCurrentMethod().DeclaringType.Name}:");
                 Utils.PrintException(e);
             }
-            return true;
+            return;
         }
     }
 
@@ -1168,9 +1210,9 @@ namespace AutoRestock
                     (GameInput.GetButtonDown(GameInput.ButtonCode.PrimaryClick) ||
                      GameInput.GetButtonDown(GameInput.ButtonCode.SecondaryClick) ||
                      GameInput.GetButtonDown(GameInput.ButtonCode.TertiaryClick)) &&
-                     Manager.playerAccessedSlot == null)
+                     Manager.playerClickedSlot == null)
                 {
-                    Manager.playerAccessedSlot = hoveredSlot.assignedSlot;
+                    Manager.playerClickedSlot = hoveredSlot.assignedSlot;
                 }
             }
         }
@@ -1183,14 +1225,14 @@ namespace AutoRestock
             {
                 // Did we just end a drag?
                 ItemSlotUI draggedSlot = Utils.GetField<ItemUIManager, ItemSlotUI>("draggedSlot", __instance);
-                if (draggedSlot == null && Manager.playerAccessedSlot != null)
+                if (draggedSlot == null && Manager.playerClickedSlot != null)
                 {
-                    Manager.playerAccessedSlot = null;
+                    Manager.playerClickedSlot = null;
                 }
             }
         }
 
-        // Only restock when a non-player has depleted the item slot.
+        // Only restock when an NPC has depleted storage rack item slot.
         [HarmonyPatch(typeof(ItemSlot), "ChangeQuantity")]
         [HarmonyPrefix]
         public static void ChangeQuantityPrefix(ItemSlot __instance, ref int change)
@@ -1211,13 +1253,16 @@ namespace AutoRestock
                     return;
                 }
                 // TODO: investigate if we can just use this patch and scrap all station-specific ones
+                // we'd still need to mark slots as used on player interactions.
+                // not hard to determine through UI methods.
+                // maybe??
                 if (!Utils.IsStorageRack(__instance.SlotOwner))
                 {
                     return;
                 }
 
-                // if this was a player-initiated action, don't restock.
-                if (Manager.playerAccessedSlot == __instance)
+                // if this was a player-initiated grab, don't restock.
+                if (Manager.playerClickedSlot == __instance)
                 {
                     return;
                 }

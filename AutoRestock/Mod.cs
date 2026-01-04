@@ -73,5 +73,8 @@ namespace AutoRestock
 //  - clean up utils type conversion/checking functions - done
 //  - fix bug where storageracks would sometimes not restock if a player was looking into them - done
 //  - fix bug where dryingrack speed is disregarded - done
-//  - investigate whether the ItemSlot.ChangeQuantity patch can replace station-specific patches
+//  - investigate whether the ItemSlot.ChangeQuantity patch can replace station-specific patches - maybe
+//  - fix bug where descendants of StorableItemInstance did not have their class-specific fields properly set - done
+//  - properly lock itemslot while restocking - done
+//  - check for insufficient balance at slot quantity change time and abort if necessary - done (v1.0.7)
 
