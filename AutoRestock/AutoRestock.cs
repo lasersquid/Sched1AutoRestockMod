@@ -7,7 +7,6 @@ using System.Reflection;
 using Newtonsoft.Json;
 
 #if MONO_BUILD
-using FishNet.Object;
 using FishNet;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.EntityFramework;
@@ -29,7 +28,6 @@ using ScheduleOne.UI;
 using ScheduleOne;
 using Registry = ScheduleOne.Registry;
 #else
-using Il2CppFishNet.Object;
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppInterop.Runtime;
@@ -324,7 +322,9 @@ namespace AutoRestock
                 Utils.Warn($"itemid {itemID} is not a quality ingredient?");
                 return null;
             }
-            return Utils.CastTo<QualityItemInstance>(Registry.GetItem(qualityItemID).GetDefaultInstance());
+            QualityItemInstance instance =  Utils.CastTo<QualityItemInstance>(Registry.GetItem(qualityItemID).GetDefaultInstance());
+            instance.Quality = quality;
+            return instance;
         }
 
         public static bool IsStorageRack(ITransitEntity transitEntity)
@@ -990,7 +990,7 @@ namespace AutoRestock
                 }
                 if (Manager.melonPrefs.GetEntry<bool>("playerRestockStations").Value || __instance.PlayerUserObject == null)
                 {
-                    StorableItemInstance newItem = new StorableItemInstance(Registry.GetItem(operation.IngredientID), 1);
+                    StorableItemInstance newItem = Utils.GetItemInstance(operation.IngredientID);
                     Manager.TryRestocking(__instance.MixerSlot, newItem, newItem.StackLimit);
                 }
             }

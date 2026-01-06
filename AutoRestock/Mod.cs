@@ -1,7 +1,7 @@
 ﻿using MelonLoader;
 using System.Reflection;
 
-[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.7", "lasersquid", null)]
+[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.8", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace AutoRestock
@@ -77,4 +77,4 @@ namespace AutoRestock
 //  - fix bug where descendants of StorableItemInstance did not have their class-specific fields properly set - done
 //  - properly lock itemslot while restocking - done
 //  - check for insufficient balance at slot quantity change time and abort if necessary - done (v1.0.7)
-
+//  - so the v1.0.7 upload doesn't seem to be working for people. rebuilding and reuploading after some minor cleanup - done (v1.0.8)
