@@ -27,6 +27,7 @@ using ScheduleOne.UI.Items;
 using ScheduleOne.UI;
 using ScheduleOne;
 using Registry = ScheduleOne.Registry;
+using ItemDefList = System.Collections.Generic.List<ScheduleOne.ItemFramework.ItemDefinition>;
 #else
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.InteropTypes;
@@ -49,6 +50,7 @@ using Il2CppScheduleOne.Storage;
 using Il2CppScheduleOne.UI.Items;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne;
+using ItemDefList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.ItemFramework.ItemDefinition>;
 using Registry = Il2CppScheduleOne.Registry;
 #endif
 
@@ -270,6 +272,18 @@ namespace AutoRestock
 #endif
         }
 
+        // Convert a delegate to a predicate that IL2CPP ienumerable functions can actually use.
+#if MONO_BUILD
+        public static Predicate<T> ToPredicate<T>(Func<T, bool> func)
+        {
+            return new Predicate<T>(func);
+        }
+#else
+        public static Il2CppSystem.Predicate<T> ToPredicate<T>(Func<T, bool> func)
+        {
+            return DelegateSupport.ConvertDelegate<Il2CppSystem.Predicate<T>>(func);
+        }
+#endif
 
 
         // Compare unity objects by their instance ID
@@ -284,6 +298,16 @@ namespace AutoRestock
             {
                 return item.GetInstanceID();
             }
+        }
+
+        public static ItemDefList GetItemDefsContaining(List<string> terms)
+        {
+            ItemDefList itemDefs = Registry.Instance.GetAllItems();
+            ItemDefList matches = itemDefs.FindAll(Utils.ToPredicate<ItemDefinition>((def) =>
+            {
+                return terms.Any((term) => def.ID.Contains(term));
+            }));
+            return matches;
         }
 
         public static bool IsQualityIngredient(string itemID)
@@ -331,8 +355,8 @@ namespace AutoRestock
         {
             if (transitEntity != null && Utils.Is<PlaceableStorageEntity>(transitEntity))
             {
-                StorageEntity storageEntity = Utils.CastTo<PlaceableStorageEntity>(transitEntity).StorageEntity;
-                return IsStorageRack(storageEntity);
+                PlaceableStorageEntity placeable = Utils.CastTo<PlaceableStorageEntity>(transitEntity);
+                return IsStorageRack(placeable);
             }
             return false;
         }
@@ -349,11 +373,29 @@ namespace AutoRestock
 
         public static bool IsStorageRack(StorageEntity entity)
         {
-            List<string> shelves = ["Safe", "Small Storage Rack", "Medium Storage Rack", "Large Storage Rack", "StorageRack"];
             if (entity != null)
             {
-                string objName = entity.StorageEntityName;
-                return shelves.Any((name) => objName.Contains(name));
+                PlaceableStorageEntity placeable = entity.GetComponent<PlaceableStorageEntity>();
+                if (placeable != null)
+                {
+                    return IsStorageRack(placeable);
+                }
+                else
+                {
+                    Utils.Warn($"StorageEntity {entity.name} did not have PlaceableStorageEntity component");
+                }
+                return false;
+            }
+            return false;
+        }
+
+        public static bool IsStorageRack(PlaceableStorageEntity placeable)
+        {
+            List<string> itemIDs = ["safe", "smallstoragerack", "mediumstoragerack", "largestoragerack", "wallmountedshelf"];
+            if (placeable != null)
+            {
+                string placeableID = placeable.ItemInstance.ID;
+                return itemIDs.Any((id) => placeableID.Contains(id));
             }
             return false;
         }
@@ -366,7 +408,6 @@ namespace AutoRestock
                 return IsStation(gridItem);
             }
             return false;
-
         }
 
         public static bool IsStation(IItemSlotOwner slotOwner)
@@ -668,9 +709,11 @@ namespace AutoRestock
             if (isInitialized && InstanceFinder.IsServer)
             {
                 string itemID = item.ID;
+                int restockAmountSetting = Mathf.Max(melonPrefs.GetEntry<int>("restockAmount").Value, 0);
+                int restockQuantity = restockAmountSetting == 0 ? quantity : restockAmountSetting;
                 float discount = Mathf.Clamp01(melonPrefs.GetEntry<float>("itemDiscount").Value);
                 float unitPrice = item.GetMonetaryValue() * 2f / (float)item.Quantity;
-                float totalCost = unitPrice * (float)quantity * (1f - discount);
+                float totalCost = unitPrice * (float)restockQuantity * (1f - discount);
                 bool useCash = melonPrefs.GetEntry<bool>("payWithCash").Value;
                 bool useDebt = melonPrefs.GetEntry<bool>("useDebt").Value;
                 SlotIdentifier slotID = SerializeSlot(slot);
@@ -689,14 +732,14 @@ namespace AutoRestock
                         float balance = useCash ? moneyManager.cashBalance : moneyManager.onlineBalance;
                         if (balance < totalCost && !useDebt)
                         {
-                            Utils.Log($"Can't afford to restock {quantity}x {itemID} (${totalCost}).");
+                            Utils.Log($"Can't afford to restock {restockQuantity}x {itemID} (${totalCost}).");
                         }
                         else if (balance >= totalCost)
                         {
                             AcquireMutex();
-                            Transaction transaction = new Transaction(itemID, quantity, discount, unitPrice, totalCost, useCash, slotID);
+                            Transaction transaction = new Transaction(itemID, restockQuantity, discount, unitPrice, totalCost, useCash, slotID);
                             ledger.Add(transaction);
-                            Utils.Debug($"Starting restock coroutine ({itemID} x{quantity} at {slotID.property}).");
+                            Utils.Debug($"Starting restock coroutine ({itemID} x{restockQuantity} at {slotID.property}).");
                             coroutines[transaction] = MelonCoroutines.Start(RestockCoroutine(slot, item, transaction));
                             ReleaseMutex();
                         }
@@ -729,7 +772,6 @@ namespace AutoRestock
 
             Utils.VerboseLog($"Restocking {item.Name} (${transaction.unitPrice}) x{transaction.quantity} at {transaction.slotID.property}. Total: ${transaction.totalCost}.");
 
-            bool useDebt = melonPrefs.GetEntry<bool>("useDebt").Value;
             bool didPay = false;
             if (transaction.totalCost <= 0f)
             {
@@ -740,7 +782,7 @@ namespace AutoRestock
             {
                 bool payWithCash = melonPrefs.GetEntry<bool>("payWithCash").Value;
                 float balance = payWithCash ? moneyManager.cashBalance : moneyManager.onlineBalance;
-                if (balance < transaction.totalCost && !useDebt)
+                if (balance < transaction.totalCost)
                 {
                     Utils.Log($"Insufficient balance to restock {item.Name} (${transaction.unitPrice}) x{transaction.quantity} at {transaction.slotID.property}, total ${transaction.totalCost}; aborting.");
                 }
@@ -836,7 +878,9 @@ namespace AutoRestock
 
         public static float LedgerTotal()
         {
-            return ledger.Aggregate<Transaction, float>(0f, (float accum, Transaction transaction) => accum + transaction.totalCost);
+            return ledger.Aggregate<Transaction, float>(0f, (float accum, Transaction transaction) => 
+                accum + transaction.totalCost
+            );
         }
 
         public static string LedgerToJson()
@@ -1093,6 +1137,7 @@ namespace AutoRestock
                 if (Manager.melonPrefs.GetEntry<bool>("playerRestockStations").Value ||
                     __instance.PlayerUserObject == null)
                 {
+                    // TODO: see if we can just grab the ingredients during ItemSlot.ChangeQuantity patch
                     // See what ingredients we're missing
                     List<ItemDefinition> missingIngredients = new List<ItemDefinition>();
                     foreach (StationRecipe.IngredientQuantity i in op.Recipe.Ingredients)
@@ -1192,11 +1237,13 @@ namespace AutoRestock
         }
     }
 
-
     [HarmonyPatch]
     public class StorageEntityPatches
     {
         // Keep track of player-initiated itemslot changes.
+        // We only care about the case where a player picks up or
+        // quick-drops from an itemslot, since those are the only
+        // actions that could deplete the itemslot.
         [HarmonyPatch(typeof(ItemUIManager), "Update")]
         [HarmonyPrefix]
         public static void UpdatePrefix(ItemUIManager __instance)
@@ -1244,14 +1291,20 @@ namespace AutoRestock
 
             try
             {
-                if (!Manager.melonPrefs.GetEntry<bool>("enableStorage").Value)
-                {
-                    return;
-                }
                 if (__instance.ItemInstance == null || (__instance.Quantity + change > 0))
                 {
                     return;
                 }
+                if (!Manager.melonPrefs.GetEntry<bool>("enableStorage").Value)
+                {
+                    return;
+                }
+                // if this was a player-initiated grab, don't restock.
+                if (Manager.playerClickedSlot == __instance)
+                {
+                    return;
+                }
+
                 // TODO: investigate if we can just use this patch and scrap all station-specific ones
                 // we'd still need to mark slots as used on player interactions.
                 // not hard to determine through UI methods.
@@ -1261,11 +1314,6 @@ namespace AutoRestock
                     return;
                 }
 
-                // if this was a player-initiated grab, don't restock.
-                if (Manager.playerClickedSlot == __instance)
-                {
-                    return;
-                }
                 StorableItemInstance newItem = Utils.CastTo<StorableItemInstance>(__instance.ItemInstance.GetCopy(1));
                 Manager.TryRestocking(__instance, newItem, newItem.StackLimit);
             }

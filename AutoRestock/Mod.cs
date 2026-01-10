@@ -1,7 +1,7 @@
 ﻿using MelonLoader;
 using System.Reflection;
 
-[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.8", "lasersquid", null)]
+[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.9", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace AutoRestock
@@ -25,7 +25,7 @@ namespace AutoRestock
 
             melonPrefs.CreateEntry<float>("itemDiscount", 0f, "Restock discount", "Discount applied to restock price (0.2 = 20% off)");
             melonPrefs.CreateEntry<bool>("payWithCash", true, "Pay for restock with cash", "True to pay with cash, false to pay with bank account");
-            melonPrefs.CreateEntry<bool>("useDebt", false, "Enable debt", "Enable restocking even when zero or negative cash/bank balance");
+            melonPrefs.CreateEntry<int>("restockAmount", 0, "Amount to restock", "Amount to restock when a restock is triggered (enter 0 for item stacklimit)");
             melonPrefs.CreateEntry<bool>("enableCauldrons", true, "Enable auto-restock on cauldrons", "Enable auto-restock on cauldrons");
             melonPrefs.CreateEntry<bool>("enableMixingStations", true, "Enable auto-restock on mixing stations", "Enable auto-restock on mixing stations");
             melonPrefs.CreateEntry<bool>("enableChemistryStations", true, "Enable auto-restock on chemistry stations", "Enable auto-restock on chemistry stations");
@@ -78,3 +78,10 @@ namespace AutoRestock
 //  - properly lock itemslot while restocking - done
 //  - check for insufficient balance at slot quantity change time and abort if necessary - done (v1.0.7)
 //  - so the v1.0.7 upload doesn't seem to be working for people. rebuilding and reuploading after some minor cleanup - done (v1.0.8)
+//  - fix no restock on named shelves - done
+//  - remove debt option, since the underlying cash system no longer supports it - done (v1.0.9)
+
+
+// Bugs
+// - at least one person is seeing no restock on large supply shelf -- probably because they named the shelf
+// - debt not working -- underlying system overhauled to prevent this, sorry :(
