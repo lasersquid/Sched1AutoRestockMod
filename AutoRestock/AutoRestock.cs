@@ -715,7 +715,6 @@ namespace AutoRestock
                 float unitPrice = item.GetMonetaryValue() * 2f / (float)item.Quantity;
                 float totalCost = unitPrice * (float)restockQuantity * (1f - discount);
                 bool useCash = melonPrefs.GetEntry<bool>("payWithCash").Value;
-                bool useDebt = melonPrefs.GetEntry<bool>("useDebt").Value;
                 SlotIdentifier slotID = SerializeSlot(slot);
 
                 try
@@ -730,7 +729,7 @@ namespace AutoRestock
                     if (Manager.ItemIsRestockable(item.ID))
                     {
                         float balance = useCash ? moneyManager.cashBalance : moneyManager.onlineBalance;
-                        if (balance < totalCost && !useDebt)
+                        if (balance < totalCost)
                         {
                             Utils.Log($"Can't afford to restock {restockQuantity}x {itemID} (${totalCost}).");
                         }

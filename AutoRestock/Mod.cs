@@ -1,7 +1,7 @@
 ﻿using MelonLoader;
 using System.Reflection;
 
-[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.0.9", "lasersquid", null)]
+[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.1.0", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace AutoRestock
@@ -80,6 +80,7 @@ namespace AutoRestock
 //  - so the v1.0.7 upload doesn't seem to be working for people. rebuilding and reuploading after some minor cleanup - done (v1.0.8)
 //  - fix no restock on named shelves - done
 //  - remove debt option, since the underlying cash system no longer supports it - done (v1.0.9)
+//  - ACTUALLY remove debt option. how did I lose that changeset? - done (v1.1.0)
 
 
 // Bugs
