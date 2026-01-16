@@ -1,6 +1,7 @@
+#!/usr/bin/env pwsh
 
 param (
-    [string]$ver = "1.0.2",
+    [string]$ver = "1.0.0",
     [string]$arch = "IL2CPP",
     [string]$proj = ""
  )
@@ -18,34 +19,43 @@ else {
 }
 
 if ("$proj" -eq "") {
-    Write-Output 'Specify "-proj <projectname>""!'
+    Write-Output 'Specify "-proj <projectname>"!'
     Exit -1
 }
+
 
 $arch_lower = "$arch".ToLower()
 $dll_file = "$($proj)$($arch).dll"
 $zip_file = "$($proj)_$($arch)-$($ver).zip"
-$pkg_base = "package\thunderstore\$($arch_lower)"
+$pkg_base = Join-Path "package" "thunderstore" $arch_lower
+$zip_path = Join-Path "package" "thunderstore" $zip_file
+$mods_path = Join-Path $pkg_base "Mods"
+$dll_path = Join-Path "bin" $arch $net_ver $dll_file
+$pkg_resource_path = "package_resources"
+$extras_path = Join-Path $pkg_resource_path "extras"
+$manifest_path = Join-Path $pkg_resource_path 'manifest.json'
+$manifest_dest = Join-Path $pkg_base 'manifest.json'
 
 # Clean and create directory structure
-Remove-Item -Recurse -ErrorAction Ignore "$($pkg_base)"
-Remove-Item -ErrorAction Ignore "$($pkg_base)\..\$($zip_file)"
-mkdir "$($pkg_base)\Mods"
+Remove-Item -Recurse -ErrorAction Ignore $pkg_base
+Remove-Item -ErrorAction Ignore $zip_path
+New-Item -ItemType Directory -Path $mods_path
 
 # Copy the files
-Copy "bin\$($arch)\$($net_ver)\$($dll_file)" "$($pkg_base)\Mods"
-Copy 'package_resources\icon.png' "$($pkg_base)\icon.png"
-Copy 'package_resources\README.md' "$($pkg_base)\README.md"
-Copy 'package_resources\manifest.json' "$($pkg_base)\manifest.json"
-if (Test-Path -Path 'package_resources\extras') {
-    Copy 'package_resources\extras\*' "$($pkg_base)\Mods"
+Copy $dll_path $mods_path
+Copy $(Join-Path $pkg_resource_path 'icon.png') $pkg_base
+Copy $(Join-Path $pkg_resource_path 'README.md') $pkg_base
+Copy $(Join-Path $pkg_resource_path 'manifest.json') $pkg_base
+if (Test-Path -Path $extras_path) {
+    Copy $(Join-Path $extras_path "*") $mods_path
 }
 
 # Set version and arch strings
-$json = [System.IO.File]::ReadAllText("$($pkg_base)\manifest.json")
+$json = [System.IO.File]::ReadAllText($manifest_path)
 $json = $json.Replace('%%VERSION%%', $ver)
 $json = $json.Replace('%%ARCH%%', $arch)
-[System.IO.File]::WriteAllText("$($pkg_base)\manifest.json", $json)
+[System.IO.File]::WriteAllText($manifest_dest, $json)
 
 # Zip it all up
-Compress-Archive -Path "$($pkg_base)\*" -DestinationPath "$($pkg_base)\..\$($zip_file)"
+Compress-Archive -Path $(Join-Path $pkg_base "*") -DestinationPath $zip_path
+Exit 0

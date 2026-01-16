@@ -1,9 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<ProjName>AutoRestock</ProjName>
-		<Version>1.1.0</Version>
-		<GameDir>C:\Program Files (x86)\Steam\steamapps\common\Schedule I</GameDir>
-		<GamePath>$(GameDir)\Schedule I.exe</GamePath>
+		<Version>1.1.1</Version>
+		<GameDir>C:/Program Files (x86)/Steam/steamapps/common/Schedule I</GameDir>
+		<GamePath>$(GameDir)/Schedule I.exe</GamePath>
 	</PropertyGroup>
 
 	<!-- Conditionally set some properties depending on Configuration. -->
@@ -31,103 +31,102 @@
 		<Configurations>IL2CPP;Mono</Configurations>
 		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
 		<EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
-    <!-- ADD THIS LINE -->
+		<ProduceReferenceAssembly>false</ProduceReferenceAssembly>
 	</PropertyGroup>
 
 	<!-- Hide libs directory of other Configuration -->
 	<ItemGroup Condition="'$(Configuration)'=='Mono'">
-		<EmbeddedResource Remove="il2cpp_libs\**" />
-		<None Remove="il2cpp_libs\**" />
+		<EmbeddedResource Remove="il2cpp_libs/**" />
+		<None Remove="il2cpp_libs/**" />
 	</ItemGroup>
 	<ItemGroup Condition="'$(Configuration)'=='IL2CPP'">
-		<EmbeddedResource Remove="Mono_libs\**" />
-		<None Remove="Mono_libs\**" />
+		<EmbeddedResource Remove="Mono_libs/**" />
+		<None Remove="Mono_libs/**" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<EmbeddedResource Remove="bin\**" />
-		<EmbeddedResource Remove="obj\**" />
-		<EmbeddedResource Remove="package\**" />
-		<EmbeddedResource Remove="package_resources\**" />
-		<None Remove="bin\**" />
-		<None Remove="obj\**" />
-		<None Remove="package\**" />
-		<None Remove="package_resources\**" />
+		<EmbeddedResource Remove="bin/**" />
+		<EmbeddedResource Remove="obj/**" />
+		<EmbeddedResource Remove="package/**" />
+		<EmbeddedResource Remove="package_resources/**" />
+		<None Remove="bin/**" />
+		<None Remove="obj/**" />
+		<None Remove="package/**" />
+		<None Remove="package_resources/**" />
 	</ItemGroup>
 
 	<ItemGroup Condition="'$(Configuration)'=='IL2CPP'">
 		<Reference Include="0Harmony">
-			<HintPath>il2cpp_libs\0Harmony.dll</HintPath>
+			<HintPath>il2cpp_libs/0Harmony.dll</HintPath>
 		</Reference>
 		<Reference Include="Assembly-CSharp">
-			<HintPath>il2cpp_libs\Assembly-CSharp.dll</HintPath>
+			<HintPath>il2cpp_libs/Assembly-CSharp.dll</HintPath>
 		</Reference>
 		<Reference Include="Il2CppFishNet.Runtime">
-			<HintPath>il2cpp_libs\Il2CppFishNet.Runtime.dll</HintPath>
+			<HintPath>il2cpp_libs/Il2CppFishNet.Runtime.dll</HintPath>
 		</Reference>
 		<Reference Include="Il2CppInterop.Runtime">
-			<HintPath>il2cpp_libs\Il2CppInterop.Runtime.dll</HintPath>
+			<HintPath>il2cpp_libs/Il2CppInterop.Runtime.dll</HintPath>
 		</Reference>
 		<Reference Include="Il2Cppmscorlib">
-			<HintPath>il2cpp_libs\Il2Cppmscorlib.dll</HintPath>
+			<HintPath>il2cpp_libs/Il2Cppmscorlib.dll</HintPath>
 		</Reference>
 		<Reference Include="Unity.TextMeshPro">
-			<HintPath>il2cpp_libs\Unity.TextMeshPro.dll</HintPath>
+			<HintPath>il2cpp_libs/Unity.TextMeshPro.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine">
-			<HintPath>il2cpp_libs\UnityEngine.dll</HintPath>
+			<HintPath>il2cpp_libs/UnityEngine.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine.AIModule">
-			<HintPath>il2cpp_libs\UnityEngine.AIModule.dll</HintPath>
+			<HintPath>il2cpp_libs/UnityEngine.AIModule.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine.AnimationModule">
-			<HintPath>il2cpp_libs\UnityEngine.AnimationModule.dll</HintPath>
+			<HintPath>il2cpp_libs/UnityEngine.AnimationModule.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine.CoreModule">
-			<HintPath>il2cpp_libs\UnityEngine.CoreModule.dll</HintPath>
+			<HintPath>il2cpp_libs/UnityEngine.CoreModule.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine.PhysicsModule">
-			<HintPath>il2cpp_libs\UnityEngine.PhysicsModule.dll</HintPath>
+			<HintPath>il2cpp_libs/UnityEngine.PhysicsModule.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine.UI">
-			<HintPath>il2cpp_libs\UnityEngine.UI.dll</HintPath>
+			<HintPath>il2cpp_libs/UnityEngine.UI.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine.UIModule">
-			<HintPath>il2cpp_libs\UnityEngine.UIModule.dll</HintPath>
+			<HintPath>il2cpp_libs/UnityEngine.UIModule.dll</HintPath>
 		</Reference>
 	</ItemGroup>
 
 	<ItemGroup Condition="'$(Configuration)'=='Mono'">
 		<Reference Include="Assembly-CSharp">
-			<HintPath>mono_libs\Assembly-CSharp.dll</HintPath>
+			<HintPath>mono_libs/Assembly-CSharp.dll</HintPath>
 		</Reference>
 		<Reference Include="FishNet.Runtime">
-			<HintPath>mono_libs\FishNet.Runtime.dll</HintPath>
+			<HintPath>mono_libs/FishNet.Runtime.dll</HintPath>
 		</Reference>
 		<Reference Include="Unity.TextMeshPro">
-			<HintPath>mono_libs\Unity.TextMeshPro.dll</HintPath>
+			<HintPath>mono_libs/Unity.TextMeshPro.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine">
-			<HintPath>mono_libs\UnityEngine.dll</HintPath>
+			<HintPath>mono_libs/UnityEngine.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine.AIModule">
-			<HintPath>mono_libs\UnityEngine.AIModule.dll</HintPath>
+			<HintPath>mono_libs/UnityEngine.AIModule.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine.AnimationModule">
-			<HintPath>mono_libs\UnityEngine.AnimationModule.dll</HintPath>
+			<HintPath>mono_libs/UnityEngine.AnimationModule.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine.CoreModule">
-			<HintPath>mono_libs\UnityEngine.CoreModule.dll</HintPath>
+			<HintPath>mono_libs/UnityEngine.CoreModule.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine.PhysicsModule">
-			<HintPath>mono_libs\UnityEngine.PhysicsModule.dll</HintPath>
+			<HintPath>mono_libs/UnityEngine.PhysicsModule.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine.UI">
-			<HintPath>mono_libs\UnityEngine.UI.dll</HintPath>
+			<HintPath>mono_libs/UnityEngine.UI.dll</HintPath>
 		</Reference>
 		<Reference Include="UnityEngine.UIModule">
-			<HintPath>mono_libs\UnityEngine.UIModule.dll</HintPath>
+			<HintPath>mono_libs/UnityEngine.UIModule.dll</HintPath>
 		</Reference>
 	</ItemGroup>
 
@@ -150,6 +149,6 @@
 	</PropertyGroup>
 
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="Powershell .\package_resources\MakeVortexPackage.ps1 -arch $(Configuration) -ver $(Version) -proj $(ProjName)&#xD;&#xA;Powershell .\package_resources\MakeThunderstorePackage.ps1 -arch $(Configuration) -ver $(Version) -proj $(ProjName)&#xD;&#xA;del &quot;$(GameDir)\mods\$(ProjName)*.dll&quot; 2&gt;nul&#xD;&#xA;copy &quot;bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).dll&quot; &quot;$(GameDir)\mods\&quot;&#xD;&#xA;" />
+		<Exec Command="Powershell ./package_resources/MakeVortexPackage.ps1 -arch $(Configuration) -ver $(Version) -proj $(ProjName)&#xD;&#xA;Powershell ./package_resources/MakeThunderstorePackage.ps1 -arch $(Configuration) -ver $(Version) -proj $(ProjName)&#xD;&#xA;Powershell ./package_resources/DeployMod.ps1 -arch $(Configuration) -proj $(ProjName)&#xD;&#xA;" />
 	</Target>
 </Project>

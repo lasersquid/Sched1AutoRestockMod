@@ -710,7 +710,7 @@ namespace AutoRestock
             {
                 string itemID = item.ID;
                 int restockAmountSetting = Mathf.Max(melonPrefs.GetEntry<int>("restockAmount").Value, 0);
-                int restockQuantity = restockAmountSetting == 0 ? quantity : restockAmountSetting;
+                int restockQuantity = Mathf.Min(restockAmountSetting == 0 ? quantity : restockAmountSetting, item.StackLimit);
                 float discount = Mathf.Clamp01(melonPrefs.GetEntry<float>("itemDiscount").Value);
                 float unitPrice = item.GetMonetaryValue() * 2f / (float)item.Quantity;
                 float totalCost = unitPrice * (float)restockQuantity * (1f - discount);
@@ -719,7 +719,7 @@ namespace AutoRestock
 
                 try
                 {
-                    if ((item.StackLimit == 0))
+                    if (item.StackLimit == 0)
                     {
                         Utils.Debug($"Stacklimit ({item.StackLimit}) == 0. Not restocking.");
                         item.RequestClearSlot();
@@ -764,36 +764,48 @@ namespace AutoRestock
             // Give those methods a chance to complete before locking.
             yield return new WaitForEndOfFrame();
 
-            slot.ClearStoredInstance();
             slot.ApplyLock(oscar.NetworkObject, "Restocking item", false);
             slot.SetIsAddLocked(true);
             yield return new WaitForSeconds(1f);
 
-            Utils.VerboseLog($"Restocking {item.Name} (${transaction.unitPrice}) x{transaction.quantity} at {transaction.slotID.property}. Total: ${transaction.totalCost}.");
+            // Don't charge the player for items remaining in the slot.
+            // There will usually be zero items remaining, but if the mixing station mixer slot falls below 
+            // the station threshold, a restock can be triggered with items remaining.
+            int quantity;
+            if (transaction.quantity + slot.Quantity > item.StackLimit)
+            {
+                quantity = item.StackLimit - slot.Quantity;
+            }
+            else
+            {
+                quantity = transaction.quantity;
+            }
+            int totalCost = (int)((float)quantity * transaction.unitPrice * transaction.discount);
+            Utils.VerboseLog($"Restocking {item.Name} (${transaction.unitPrice}) x{quantity} with a discount of {transaction.discount} at {transaction.slotID.property}. Total: ${totalCost}.");
 
             bool didPay = false;
-            if (transaction.totalCost <= 0f)
+            if (totalCost <= 0f)
             {
                 Utils.VerboseLog($"Total cost of transaction is $0. Get a freebie!");
                 didPay = true;
             }
             else
             {
-                bool payWithCash = melonPrefs.GetEntry<bool>("payWithCash").Value;
-                float balance = payWithCash ? moneyManager.cashBalance : moneyManager.onlineBalance;
-                if (balance < transaction.totalCost)
+                bool useCash = melonPrefs.GetEntry<bool>("payWithCash").Value;
+                float balance = useCash ? moneyManager.cashBalance : moneyManager.onlineBalance;
+                if (balance < totalCost)
                 {
-                    Utils.Log($"Insufficient balance to restock {item.Name} (${transaction.unitPrice}) x{transaction.quantity} at {transaction.slotID.property}, total ${transaction.totalCost}; aborting.");
+                    Utils.Log($"Insufficient balance to restock {item.Name} (${transaction.unitPrice}) x{quantity} with a discount of {transaction.discount}, at {transaction.slotID.property}, total ${totalCost}; aborting.");
                 }
                 else
                 {
-                    if (payWithCash)
+                    if (useCash)
                     {
-                        moneyManager.ChangeCashBalance(-transaction.totalCost);
+                        moneyManager.ChangeCashBalance(-totalCost);
                     }
                     else
                     {
-                        moneyManager.CreateOnlineTransaction("Restock", -transaction.totalCost, 1f, $"{item.Definition.Name}");
+                        moneyManager.CreateOnlineTransaction("Restock", -totalCost, 1f, $"{item.Definition.Name}");
                     }
                     didPay = true;
                 }
@@ -804,9 +816,9 @@ namespace AutoRestock
             // You don't release the lock immediately before modifying the protected value.
             slot.SetIsAddLocked(false);
             slot.RemoveLock();
-            if (didPay && transaction.quantity > 0)
+            if (didPay && quantity > 0)
             {
-                item.SetQuantity(transaction.quantity - slot.Quantity);
+                item.SetQuantity(quantity);
                 slot.AddItem(item);
             }
 
@@ -943,6 +955,7 @@ namespace AutoRestock
     [HarmonyPatch]
     public class PersistencePatches
     {
+        // We want to initialize Manager after scene is loaded, but before the player gains control.
         // LoadManager.Start is too early.
         // Player.Activate just doesn't fire at all
         // maybe playercamera.setcanlook? nope, not called either
