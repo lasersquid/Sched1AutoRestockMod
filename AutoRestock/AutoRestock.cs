@@ -772,15 +772,23 @@ namespace AutoRestock
             // There will usually be zero items remaining, but if the mixing station mixer slot falls below 
             // the station threshold, a restock can be triggered with items remaining.
             int quantity;
+            float totalCost;
             if (transaction.quantity + slot.Quantity > item.StackLimit)
             {
                 quantity = item.StackLimit - slot.Quantity;
+                totalCost = (int)((float)quantity * transaction.unitPrice * transaction.discount);
+
+                // Update transaction object with new quantity for accurate receipt reporting
+                Manager.AcquireMutex();
+                transaction.quantity = quantity;
+                transaction.totalCost = totalCost;
+                Manager.ReleaseMutex();
             }
             else
             {
                 quantity = transaction.quantity;
+                totalCost = transaction.totalCost;
             }
-            int totalCost = (int)((float)quantity * transaction.unitPrice * transaction.discount);
             Utils.VerboseLog($"Restocking {item.Name} (${transaction.unitPrice}) x{quantity} with a discount of {transaction.discount} at {transaction.slotID.property}. Total: ${totalCost}.");
 
             bool didPay = false;
@@ -796,6 +804,7 @@ namespace AutoRestock
                 if (balance < totalCost)
                 {
                     Utils.Log($"Insufficient balance to restock {item.Name} (${transaction.unitPrice}) x{quantity} with a discount of {transaction.discount}, at {transaction.slotID.property}, total ${totalCost}; aborting.");
+                    ledger.Remove(transaction);
                 }
                 else
                 {
@@ -904,23 +913,34 @@ namespace AutoRestock
             if (isInitialized)
             {
                 string receipt = $"Restock receipt for {ledgerDay}:\n\n";
-                float total = 0f;
+                float grandTotal = 0f;
                 if (ledger.Count > 0)
                 {
-                    Dictionary<string, Dictionary<string, int>> itemTotals = new Dictionary<string, Dictionary<string, int>>();
+                    Dictionary<string, Dictionary<string, float>> itemTotals = new Dictionary<string, Dictionary<string, float>>();
+                    Dictionary<string, Dictionary<string, int>> itemQuantities = new Dictionary<string, Dictionary<string, int>>();
                     Dictionary<string, float> itemPrices = new Dictionary<string, float>();
+                    Dictionary<string, float> totalCosts = new Dictionary<string, float>();
 
                     foreach (var transaction in ledger)
                     {
                         if (!itemTotals.ContainsKey(transaction.slotID.property))
                         {
-                            itemTotals[transaction.slotID.property] = new Dictionary<string, int>();
+                            itemTotals[transaction.slotID.property] = new Dictionary<string, float>();
                         }
                         if (!itemTotals[transaction.slotID.property].ContainsKey(transaction.itemID))
                         {
-                            itemTotals[transaction.slotID.property][transaction.itemID] = 0;
+                            itemTotals[transaction.slotID.property][transaction.itemID] = 0f;
                         }
-                        itemTotals[transaction.slotID.property][transaction.itemID] += transaction.quantity;
+                        if (!itemQuantities.ContainsKey(transaction.slotID.property))
+                        {
+                            itemQuantities[transaction.slotID.property] = new Dictionary<string, int>();
+                        }
+                        if (!itemQuantities[transaction.slotID.property].ContainsKey(transaction.itemID))
+                        {
+                            itemQuantities[transaction.slotID.property][transaction.itemID] = 0;
+                        }
+                        itemQuantities[transaction.slotID.property][transaction.itemID] += transaction.quantity;
+                        itemTotals[transaction.slotID.property][transaction.itemID] += transaction.totalCost;
                         itemPrices[transaction.itemID] = transaction.unitPrice;
                     }
 
@@ -928,19 +948,23 @@ namespace AutoRestock
                     {
                         float propertyTotal = 0f;
                         receipt += $"{property}: \n";
-                        foreach (var entry in itemTotals[property])
+                        foreach (var entry in itemQuantities[property])
                         {
-                            string itemName = Registry.GetItem(entry.Key).Name;
-                            receipt += $"  {itemName} x{entry.Value} = ${itemPrices[entry.Key] * (float)entry.Value}\n";
-                            propertyTotal += itemPrices[entry.Key] * (float)entry.Value;
+                            string name = entry.Key;
+                            float quantity = entry.Value;
+                            float total = itemTotals[property][name];
+
+                            string prettyName = Registry.GetItem(name).Name;
+                            receipt += $"  {prettyName} x{quantity} = ${total}\n";
+                            propertyTotal += total;
                         }
                         receipt += "=====================\n";
                         receipt += $"  Property total: ${propertyTotal}\n\n";
-                        total += propertyTotal;
+                        grandTotal += propertyTotal;
                     }
                 }
                 receipt += "=====================\n";
-                receipt += $"  Grand total: ${total}\n\n";
+                receipt += $"  Grand total: ${grandTotal}\n\n";
                 receipt += $"Oscar says thank you for your business! :)";
 
                 return receipt;

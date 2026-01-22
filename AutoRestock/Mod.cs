@@ -81,8 +81,9 @@ namespace AutoRestock
 //  - fix no restock on named shelves - done
 //  - remove debt option, since the underlying cash system no longer supports it - done (v1.0.9)
 //  - ACTUALLY remove debt option. how did I lose that changeset? - done (v1.1.0)
+//  - Fix math in receipt having to do with discounts - done
+//  - Don't charge for items that don't fit in the slot - done
+//  - Update ledger when transaction restocks fewer items than originally expected - done (v1.1.1)
 
 
 // Bugs
-// - at least one person is seeing no restock on large supply shelf -- probably because they named the shelf
-// - debt not working -- underlying system overhauled to prevent this, sorry :(
