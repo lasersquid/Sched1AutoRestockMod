@@ -391,7 +391,10 @@ namespace AutoRestock
 
         public static bool IsStorageRack(PlaceableStorageEntity placeable)
         {
-            List<string> itemIDs = ["safe", "smallstoragerack", "mediumstoragerack", "largestoragerack", "wallmountedshelf"];
+            List<string> itemIDs = ["safe", "wallmountedshelf",
+                "smallstoragerack", "mediumstoragerack", "largestoragerack",
+                "smallstoragecloset", "mediumstoragecloset", "largestoragecloset", "hugestoragecloset"
+            ];
             if (placeable != null)
             {
                 string placeableID = placeable.ItemInstance.ID;
