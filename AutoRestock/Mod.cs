@@ -1,7 +1,7 @@
 ﻿using MelonLoader;
 using System.Reflection;
 
-[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.1.2", "lasersquid", null)]
+[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.1.3", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace AutoRestock
@@ -85,6 +85,8 @@ namespace AutoRestock
 //  - Don't charge for items that don't fit in the slot - done
 //  - Update ledger when transaction restocks fewer items than originally expected - done (v1.1.1)
 //  - Add storage closets for 0.4.3 - done (v1.1.2)
+//  - Add player restock shelves hotkey - done
+//  - Test player restock shelves hotkey in multiplayer
 
 
 // Bugs

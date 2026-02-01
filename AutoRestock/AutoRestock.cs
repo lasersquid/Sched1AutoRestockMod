@@ -3,6 +3,7 @@ using MelonLoader;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.InputSystem;
 using System.Reflection;
 using Newtonsoft.Json;
 
@@ -486,6 +487,7 @@ namespace AutoRestock
         }
 
         public static ItemSlot playerClickedSlot;
+        public static bool doRestockPlayerClickedSlot;
         public static List<ItemSlot> playerStationOperationSlots;
         public static MelonPreferences_Category melonPrefs;
         private static TimeManager timeManager;
@@ -607,6 +609,8 @@ namespace AutoRestock
                 oscar = UnityEngine.Object.FindObjectsOfType<NPC>(true).FirstOrDefault((npc) => npc.ID == "oscar_holland");
 
                 playerClickedSlot = null;
+                doRestockPlayerClickedSlot = false;
+
                 playerStationOperationSlots = new List<ItemSlot>();
                 coroutines = new Dictionary<Transaction, object>();
 
@@ -1299,6 +1303,12 @@ namespace AutoRestock
                      Manager.playerClickedSlot == null)
                 {
                     Manager.playerClickedSlot = hoveredSlot.assignedSlot;
+
+                    // Are we holding left ctrl?
+                    if (Keyboard.current.leftCtrlKey.isPressed)
+                    {
+                        Manager.doRestockPlayerClickedSlot = true;
+                    }
                 }
             }
         }
@@ -1314,6 +1324,7 @@ namespace AutoRestock
                 if (draggedSlot == null && Manager.playerClickedSlot != null)
                 {
                     Manager.playerClickedSlot = null;
+                    Manager.doRestockPlayerClickedSlot = false;
                 }
             }
         }
@@ -1338,17 +1349,18 @@ namespace AutoRestock
                 {
                     return;
                 }
-                // if this was a player-initiated grab, don't restock.
-                if (Manager.playerClickedSlot == __instance)
-                {
-                    return;
-                }
-
+                
                 // TODO: investigate if we can just use this patch and scrap all station-specific ones
                 // we'd still need to mark slots as used on player interactions.
                 // not hard to determine through UI methods.
                 // maybe??
                 if (!Utils.IsStorageRack(__instance.SlotOwner))
+                {
+                    return;
+                }
+
+                // Check if we should restock player-initiated grab
+                if (Manager.playerClickedSlot != __instance || !Manager.doRestockPlayerClickedSlot)
                 {
                     return;
                 }
