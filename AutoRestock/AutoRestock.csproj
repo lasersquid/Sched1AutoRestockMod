@@ -66,6 +66,9 @@
 		<Reference Include="Il2CppFishNet.Runtime">
 			<HintPath>il2cpp_libs/Il2CppFishNet.Runtime.dll</HintPath>
 		</Reference>
+		<Reference Include="Il2Cppcom.rlabrecque.steamworks.net">
+			<HintPath>il2cpp_libs/Il2Cppcom.rlabrecque.steamworks.net.dll</HintPath>
+		</Reference>
 		<Reference Include="Il2CppInterop.Runtime">
 			<HintPath>il2cpp_libs/Il2CppInterop.Runtime.dll</HintPath>
 		</Reference>
@@ -74,6 +77,9 @@
 		</Reference>
 		<Reference Include="Unity.InputSystem">
 			<HintPath>il2cpp_libs/Unity.InputSystem.dll</HintPath>
+		</Reference>
+		<Reference Include="SteamNetworkLib">
+			<HintPath>il2cpp_libs/SteamNetworkLib-IL2Cpp.dll</HintPath>
 		</Reference>
 		<Reference Include="Unity.TextMeshPro">
 			<HintPath>il2cpp_libs/Unity.TextMeshPro.dll</HintPath>
@@ -105,8 +111,14 @@
 		<Reference Include="Assembly-CSharp">
 			<HintPath>mono_libs/Assembly-CSharp.dll</HintPath>
 		</Reference>
+		<Reference Include="com.rlabrecque.steamworks.net">
+			<HintPath>mono_libs/com.rlabrecque.steamworks.net.dll</HintPath>
+		</Reference>
 		<Reference Include="FishNet.Runtime">
 			<HintPath>mono_libs/FishNet.Runtime.dll</HintPath>
+		</Reference>
+		<Reference Include="SteamNetworkLib">
+			<HintPath>mono_libs/SteamNetworkLib-IL2Cpp.dll</HintPath>
 		</Reference>
 		<Reference Include="Unity.InputSystem">
 			<HintPath>il2cpp_libs/Unity.InputSystem.dll</HintPath>

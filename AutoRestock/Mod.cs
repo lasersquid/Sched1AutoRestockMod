@@ -1,5 +1,7 @@
 ﻿using MelonLoader;
 using System.Reflection;
+using SteamNetworkLib;
+using SteamNetworkLib.Models;
 
 [assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.1.3", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
@@ -10,12 +12,51 @@ namespace AutoRestock
     {
         public MelonPreferences_Category melonPrefs;
         public HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("com.lasersquid.autorestock");
+        public SteamNetworkClient client;
 
         public override void OnInitializeMelon()
         {
             CreateMelonPreferences();
             Utils.Initialize(this);
             LoggerInstance.Msg("Mod initialized.");
+        }
+
+        public override void OnSceneWasInitialized(int buildIndex, string sceneName)
+        {
+            base.OnSceneWasInitialized(buildIndex, sceneName);
+            LoggerInstance.Msg($"Scene {sceneName} initialized.");
+            if (sceneName.ToLower().Contains("menu"))
+            {
+                if (client == null)
+                {
+                    LoggerInstance.Msg($"Creating SteamNetworkClient object.");
+                    client = new SteamNetworkClient();
+                    if (client.Initialize())
+                    {
+                        client.OnLobbyCreated += (s, e) => LoggerInstance.Msg($"Lobby created: {e.Lobby.LobbyId}");
+                        client.RegisterMessageHandler<TextMessage>((msg, sender) => 
+                        {
+                            LoggerInstance.Msg($"Received message from {sender}: {msg.Content}");
+                        });
+                        client.OnLobbyJoined += (s, e) => LoggerInstance.Msg($"Joined lobby {e.Lobby.LobbyId}");
+                        client.OnMemberJoined += (s, e) => LoggerInstance.Msg($"Member {e.Member.DisplayName} joined lobby");
+                    }
+
+                    Utils.LateInitialize();
+                }
+            }
+        }
+
+        public override void OnUpdate()
+        {
+            base.OnUpdate();
+            client?.ProcessIncomingMessages();
+        }
+
+        public override void OnDeinitializeMelon()
+        {
+            base.OnDeinitializeMelon();
+            client?.Dispose();
         }
 
         private void CreateMelonPreferences()
@@ -87,6 +128,8 @@ namespace AutoRestock
 //  - Add storage closets for 0.4.3 - done (v1.1.2)
 //  - Add player restock shelves hotkey - done
 //  - Test player restock shelves hotkey in multiplayer
+//  - Fix bug deserializing itemslots for multi-level properties - done
 
 
 // Bugs
+//  - DeserializeSlot does not always grab correct griditem on properties with multiple grids - fixed

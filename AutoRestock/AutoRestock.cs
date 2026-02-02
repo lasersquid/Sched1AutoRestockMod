@@ -6,6 +6,13 @@ using UnityEngine.Events;
 using UnityEngine.InputSystem;
 using System.Reflection;
 using Newtonsoft.Json;
+using SteamNetworkLib;
+using Il2CppSteamworks;
+using SteamNetworkLib.Models;
+using System.Text;
+
+
+
 
 #if MONO_BUILD
 using FishNet;
@@ -69,6 +76,30 @@ namespace AutoRestock
             S1Assembly = AppDomain.CurrentDomain.GetAssemblies().First((Assembly a) => a.GetName().Name == "Assembly-CSharp");
 #endif
         }
+
+        public static void LateInitialize()
+        {
+            Mod.client?.RegisterMessageHandler<TransactionMessage>(new Action<TransactionMessage, CSteamID>(Utils.ReceiveTransaction));
+        }
+
+        public class TransactionMessage : P2PMessage
+        {
+            public override string MessageType => "CUSTOM";
+            public Manager.Transaction transaction = null;
+
+            public override byte[] Serialize()
+            {
+                var json = JsonConvert.SerializeObject(transaction);
+                return Encoding.UTF8.GetBytes(json);
+            }
+
+            public override void Deserialize(byte[] data)
+            {
+                var json = Encoding.UTF8.GetString(data);
+                transaction = JsonConvert.DeserializeObject<Manager.Transaction>(json);
+            }
+        }
+
 
         public static void PrintException(Exception e)
         {
@@ -286,7 +317,6 @@ namespace AutoRestock
         }
 #endif
 
-
         // Compare unity objects by their instance ID
         public class UnityObjectComparer : IEqualityComparer<UnityEngine.Object>
         {
@@ -326,17 +356,22 @@ namespace AutoRestock
             return Utils.CastTo<StorableItemInstance>(Registry.GetItem(itemID).GetDefaultInstance());
         }
 
+        private static Dictionary<EQuality, string> qualityStrings = new Dictionary<EQuality, string>
+        {
+            { EQuality.Heavenly, "heavenly" },
+            { EQuality.Premium, "highquality" },
+            { EQuality.Standard, "" },
+            { EQuality.Poor, "lowquality" },
+            { EQuality.Trash, "trash" }
+        };
+
+        public static string GetQualityItemID(QualityItemInstance item)
+        {
+            return $"{qualityStrings[item.Quality]}{item.ID}";
+        }
+
         public static QualityItemInstance GetQualityItemInstance(string itemID, EQuality quality)
         {
-            Dictionary<EQuality, string> qualityStrings = new Dictionary<EQuality, string>
-            {
-                { EQuality.Heavenly, "heavenly" },
-                { EQuality.Premium, "highquality" },
-                { EQuality.Standard, "" },
-                { EQuality.Poor, "lowquality" },
-                { EQuality.Trash, "trash" }
-            };
-
             string qualityItemID;
             if (IsQualityIngredient(itemID))
             {
@@ -347,7 +382,7 @@ namespace AutoRestock
                 Utils.Warn($"itemid {itemID} is not a quality ingredient?");
                 return null;
             }
-            QualityItemInstance instance =  Utils.CastTo<QualityItemInstance>(Registry.GetItem(qualityItemID).GetDefaultInstance());
+            QualityItemInstance instance = Utils.CastTo<QualityItemInstance>(Registry.GetItem(qualityItemID).GetDefaultInstance());
             instance.Quality = quality;
             return instance;
         }
@@ -434,6 +469,50 @@ namespace AutoRestock
             }
             return false;
         }
+
+        public static void ReceiveTransaction(TransactionMessage transactionMessage, CSteamID sender)
+        {
+            if (!Manager.isInitialized)
+            {
+                Log($"Couldn't process transaction, Manager is not initialized!");
+                return;
+            }
+
+            Log($"Received transaction from {sender}.");
+            Manager.Transaction transaction = transactionMessage.transaction;
+            StorableItemInstance itemInstance = GetItemInstance(transaction.itemID);
+            ItemSlot slot = Manager.DeserializeSlot(transaction.slotID);
+            if (slot == null)
+            {
+                Log($"Couldn't deserialize slot.");
+                return;
+            }
+            Manager.TryRestocking(slot, itemInstance, transaction.quantity);
+        }
+
+        public static void SendTransaction(Manager.Transaction transaction)
+        {
+            TransactionMessage transactionMessage = new TransactionMessage { transaction = transaction };
+            Log($"Sending transaction for {transaction.itemID} x{transaction.quantity} at {transaction.property}.");
+            Mod.client?.BroadcastMessageAsync(transactionMessage);
+        }
+
+#if MONO
+        public static List<T> ListConvert<T>(List<T> list)
+        {
+            return list;
+        }
+#else
+        public static List<T> ListConvert<T>(Il2CppSystem.Collections.Generic.List<T> list)
+        {
+            List<T> newList = new List<T>();
+            foreach (T item in list)
+            {
+                newList.Add(item);
+            }
+            return newList;
+        }
+#endif
     }
 
     public static class Manager
@@ -441,6 +520,7 @@ namespace AutoRestock
         public class Transaction
         {
             public string itemID;
+            public int quality;
             public int quantity;
             public float discount;
             public float unitPrice;
@@ -449,15 +529,21 @@ namespace AutoRestock
             public bool useCash;
             public SlotIdentifier slotID;
 
-            public Transaction(string itemID, int quantity, float discount, float unitPrice, float totalCost, bool useCash, SlotIdentifier slotID)
+            public Transaction(string itemID, EQuality quality, int quantity, float discount, float unitPrice, float totalCost, bool useCash, SlotIdentifier slotID)
             {
                 this.itemID = itemID;
+                this.quality = (int)quality;
                 this.quantity = quantity;
                 this.discount = discount;
                 this.unitPrice = unitPrice;
                 this.totalCost = totalCost;
                 this.useCash = useCash;
                 this.slotID = slotID;
+            }
+
+            public override string ToString()
+            {
+                return $"{itemID} x{quantity} for {slotID.ToString()}";
             }
         }
 
@@ -467,25 +553,34 @@ namespace AutoRestock
             public string type;
             public int slotIndex;
             public string property;
+            public string grid;
 
-            public SlotIdentifier(string property, Vector2 gridLocation, int slotIndex, string type)
+            public SlotIdentifier(string property, Vector2 gridLocation, int slotIndex, string type, string grid)
             {
                 this.property = property;
                 this.gridLocation = new List<float>([gridLocation.x, gridLocation.y,]);
                 this.slotIndex = slotIndex;
                 this.type = type;
+                this.grid = grid;
             }
 
             [JsonConstructor]
-            public SlotIdentifier(string property, List<float> gridLocation, int slotIndex, string type)
+            public SlotIdentifier(string property, List<float> gridLocation, int slotIndex, string type, string grid)
             {
                 this.property = property;
                 this.gridLocation = gridLocation;
                 this.slotIndex = slotIndex;
                 this.type = type;
+                this.grid = grid;
+            }
+
+            public override string ToString()
+            {
+                return $"{type} at {property} ({gridLocation[0]}, {gridLocation[1]})";
             }
         }
 
+        public static bool isClient;
         public static ItemSlot playerClickedSlot;
         public static bool doRestockPlayerClickedSlot;
         public static List<ItemSlot> playerStationOperationSlots;
@@ -505,18 +600,15 @@ namespace AutoRestock
         public static SlotIdentifier SerializeSlot(ItemSlot slot)
         {
             GridItem gridItem;
-            string type;
 
             if (Utils.IsStation(slot.SlotOwner))
             {
                 gridItem = Utils.CastTo<GridItem>(slot.SlotOwner);
-                type = gridItem.name;
             }
             else if (Utils.IsStorageRack(slot.SlotOwner))
             {
                 StorageEntity storageEntity = Utils.CastTo<StorageEntity>(slot.SlotOwner);
                 gridItem = storageEntity.gameObject.GetComponent<GridItem>();
-                type = storageEntity.StorageEntityName;
             }
             else
             {
@@ -524,9 +616,13 @@ namespace AutoRestock
                 return null;
             }
 
+            string type = gridItem.ItemInstance.Definition.ID;
             string property = gridItem.ParentProperty.name;
             Vector2 coordinate = (Vector2)Utils.GetField<GridItem>("_originCoordinate", gridItem);
-            return new SlotIdentifier(property, coordinate, (int)Utils.GetProperty<ItemSlot>("SlotIndex", slot), type);
+            int slotIndex = (int)Utils.GetProperty<ItemSlot>("SlotIndex", slot);
+            string grid = gridItem.OwnerGrid.name;
+
+            return new SlotIdentifier(property, coordinate, slotIndex, type, grid);
         }
 
         public static ItemSlot DeserializeSlot(SlotIdentifier identifier)
@@ -534,19 +630,25 @@ namespace AutoRestock
             try
             {
                 List<Property> properties = UnityEngine.Object.FindObjectsOfType<Property>().ToList();
-                List<GridItem> gridItems = UnityEngine.Object.FindObjectsOfType<GridItem>().ToList();
-                Property property = properties.FirstOrDefault<Property>((Property p) => p.name == identifier.property);
-                List<GridItem> gridItemsOnProperty = gridItems.FindAll((GridItem g) => g.ParentProperty == property);
+                Property property = properties.FirstOrDefault<Property>((Property p) => p.name == identifier.property && p.Grids.Count > 0);
+                List<BuildableItem> gridItemsOnProperty = Utils.ListConvert<BuildableItem>(property.BuildableItems);
 
                 Vector2 targetCoord = new Vector2(identifier.gridLocation[0], identifier.gridLocation[1]);
-                GridItem gridItem = gridItemsOnProperty.FirstOrDefault<GridItem>((GridItem g) =>
-                    (Vector2)Utils.GetField<GridItem>("_originCoordinate", g) == targetCoord
-                );
-                if (gridItem == null)
+                BuildableItem buildableItem = gridItemsOnProperty.FirstOrDefault<BuildableItem>((BuildableItem b) =>
+                {
+                    if (Utils.Is<GridItem>(b))
+                    {
+                        GridItem g = Utils.CastTo<GridItem>(b);
+                        return g._originCoordinate == targetCoord && g.OwnerGrid.name == identifier.grid;
+                    }
+                    return false;
+                });
+                if (buildableItem == null)
                 {
                     Utils.Warn($"Couldn't deserialize slot--coordinates did not map to a griditem");
                     return null;
                 }
+                GridItem gridItem = Utils.CastTo<GridItem>(buildableItem);
 
                 IItemSlotOwner slotOwner;
                 if (Utils.IsStation(gridItem))
@@ -564,6 +666,11 @@ namespace AutoRestock
                     return null;
                 }
 
+                if (slotOwner.ItemSlots.Count <= identifier.slotIndex)
+                {
+                    Utils.Warn($"couldn't deserialize slot--slot index was greater than itemslot count ({identifier.slotIndex} > {slotOwner.ItemSlots.Count})");
+                    return null;
+                }
                 return slotOwner.ItemSlots[identifier.slotIndex];
             }
             catch (Exception e)
@@ -572,6 +679,30 @@ namespace AutoRestock
             }
 
             return null;
+        }
+
+        public static Transaction CreateTransaction(ItemSlot slot, ItemInstance item, int quantity)
+        {
+            string itemID = item.ID;
+            EQuality quality;
+            if (Utils.Is<QualityItemInstance>(item))
+            {
+                quality = Utils.CastTo<QualityItemInstance>(item).Quality;
+            }
+            else 
+            {
+                quality = EQuality.Standard;
+            }
+            
+            int restockAmountSetting = Mathf.Max(melonPrefs.GetEntry<int>("restockAmount").Value, 0);
+            int restockQuantity = Mathf.Min(restockAmountSetting == 0 ? quantity : restockAmountSetting, item.StackLimit);
+            float discount = Mathf.Clamp01(melonPrefs.GetEntry<float>("itemDiscount").Value);
+            float unitPrice = item.GetMonetaryValue() * 2f / (float)item.Quantity;
+            float totalCost = unitPrice * (float)restockQuantity * (1f - discount);
+            bool useCash = melonPrefs.GetEntry<bool>("payWithCash").Value;
+            SlotIdentifier slotID = Manager.SerializeSlot(slot);
+
+            return new Transaction(itemID, quality, restockQuantity, discount, unitPrice, totalCost, useCash, slotID);
         }
 
         public static void CompleteTransactions(List<Transaction> transactions)
@@ -715,14 +846,7 @@ namespace AutoRestock
         {
             if (isInitialized && InstanceFinder.IsServer)
             {
-                string itemID = item.ID;
-                int restockAmountSetting = Mathf.Max(melonPrefs.GetEntry<int>("restockAmount").Value, 0);
-                int restockQuantity = Mathf.Min(restockAmountSetting == 0 ? quantity : restockAmountSetting, item.StackLimit);
-                float discount = Mathf.Clamp01(melonPrefs.GetEntry<float>("itemDiscount").Value);
-                float unitPrice = item.GetMonetaryValue() * 2f / (float)item.Quantity;
-                float totalCost = unitPrice * (float)restockQuantity * (1f - discount);
-                bool useCash = melonPrefs.GetEntry<bool>("payWithCash").Value;
-                SlotIdentifier slotID = SerializeSlot(slot);
+                Transaction transaction = CreateTransaction(slot, item, quantity);
 
                 try
                 {
@@ -735,18 +859,16 @@ namespace AutoRestock
 
                     if (Manager.ItemIsRestockable(item.ID))
                     {
-                        float balance = useCash ? moneyManager.cashBalance : moneyManager.onlineBalance;
-                        if (balance < totalCost)
+                        float balance = transaction.useCash ? moneyManager.cashBalance : moneyManager.onlineBalance;
+                        if (balance < transaction.totalCost)
                         {
-                            Utils.Log($"Can't afford to restock {restockQuantity}x {itemID} (${totalCost}).");
+                            Utils.Log($"Can't afford to restock {transaction.quantity}x {transaction.itemID} (${transaction.totalCost}).");
                         }
-                        else if (balance >= totalCost)
+                        else if (balance >= transaction.totalCost)
                         {
                             AcquireMutex();
-                            Transaction transaction = new Transaction(itemID, restockQuantity, discount, unitPrice, totalCost, useCash, slotID);
                             ledger.Add(transaction);
-                            Utils.Debug($"Starting restock coroutine ({itemID} x{restockQuantity} at {slotID.property}).");
-                            coroutines[transaction] = MelonCoroutines.Start(RestockCoroutine(slot, item, transaction));
+                            coroutines[transaction] = MelonCoroutines.Start(RestockCoroutine(transaction));
                             ReleaseMutex();
                         }
                     }
@@ -755,7 +877,6 @@ namespace AutoRestock
                 {
                     Utils.PrintException(e);
                     ReleaseMutex();
-                    item.RequestClearSlot();
                 }
             }
             else
@@ -764,16 +885,21 @@ namespace AutoRestock
             }
         }
 
-        private static IEnumerator RestockCoroutine(ItemSlot slot, StorableItemInstance item, Transaction transaction)
+        private static IEnumerator RestockCoroutine(Transaction transaction)
         {
-            // Don't clear slot and apply lock right away; some S1 methods rely on that slot being populated
-            // after TryRestock is called.
-            // Give those methods a chance to complete before locking.
+            // Give S1 methods a chance to complete before altering slot.
             yield return new WaitForEndOfFrame();
 
+            ItemSlot slot = DeserializeSlot(transaction.slotID);
             slot.ApplyLock(oscar.NetworkObject, "Restocking item", false);
             slot.SetIsAddLocked(true);
             yield return new WaitForSeconds(1f);
+
+            StorableItemInstance item = Utils.GetItemInstance(transaction.itemID);
+            if (Utils.Is<QualityItemInstance>(item))
+            {
+                Utils.CastTo<QualityItemInstance>(item).Quality = (EQuality)transaction.quality;
+            }
 
             // Don't charge the player for items remaining in the slot.
             // There will usually be zero items remaining, but if the mixing station mixer slot falls below 
@@ -801,7 +927,10 @@ namespace AutoRestock
             bool didPay = false;
             if (totalCost <= 0f)
             {
-                Utils.VerboseLog($"Total cost of transaction is $0. Get a freebie!");
+                if (quantity > 0)
+                {
+                    Utils.VerboseLog($"Total cost of transaction is $0. Get a freebie!");
+                }
                 didPay = true;
             }
             else
@@ -811,7 +940,9 @@ namespace AutoRestock
                 if (balance < totalCost)
                 {
                     Utils.Log($"Insufficient balance to restock {item.Name} (${transaction.unitPrice}) x{quantity} with a discount of {transaction.discount}, at {transaction.slotID.property}, total ${totalCost}; aborting.");
+                    AcquireMutex();
                     ledger.Remove(transaction);
+                    ReleaseMutex();
                 }
                 else
                 {
@@ -905,7 +1036,7 @@ namespace AutoRestock
 
         public static float LedgerTotal()
         {
-            return ledger.Aggregate<Transaction, float>(0f, (float accum, Transaction transaction) => 
+            return ledger.Aggregate<Transaction, float>(0f, (float accum, Transaction transaction) =>
                 accum + transaction.totalCost
             );
         }
@@ -1329,12 +1460,13 @@ namespace AutoRestock
             }
         }
 
-        // Only restock when an NPC has depleted storage rack item slot.
+        // Only restock when an NPC has depleted storage rack item slot,
+        // or the player is holding left ctrl.
         [HarmonyPatch(typeof(ItemSlot), "ChangeQuantity")]
         [HarmonyPrefix]
         public static void ChangeQuantityPrefix(ItemSlot __instance, ref int change)
         {
-            if (!InstanceFinder.IsServer || !Manager.isInitialized)
+            if (!Manager.isInitialized)
             {
                 return;
             }
@@ -1349,7 +1481,7 @@ namespace AutoRestock
                 {
                     return;
                 }
-                
+
                 // TODO: investigate if we can just use this patch and scrap all station-specific ones
                 // we'd still need to mark slots as used on player interactions.
                 // not hard to determine through UI methods.
@@ -1366,7 +1498,15 @@ namespace AutoRestock
                 }
 
                 StorableItemInstance newItem = Utils.CastTo<StorableItemInstance>(__instance.ItemInstance.GetCopy(1));
-                Manager.TryRestocking(__instance, newItem, newItem.StackLimit);
+                if (!InstanceFinder.IsServer)
+                {
+                    Manager.Transaction transaction = Manager.CreateTransaction(__instance, newItem, newItem.StackLimit);
+                    Utils.SendTransaction(transaction);
+                }
+                else
+                {
+                    Manager.TryRestocking(__instance, newItem, newItem.StackLimit);
+                }
             }
             catch (Exception e)
             {
