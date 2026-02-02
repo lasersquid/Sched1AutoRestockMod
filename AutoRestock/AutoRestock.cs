@@ -11,9 +11,6 @@ using Il2CppSteamworks;
 using SteamNetworkLib.Models;
 using System.Text;
 
-
-
-
 #if MONO_BUILD
 using FishNet;
 using ScheduleOne.DevUtilities;
@@ -34,8 +31,8 @@ using ScheduleOne.Storage;
 using ScheduleOne.UI.Items;
 using ScheduleOne.UI;
 using ScheduleOne;
-using Registry = ScheduleOne.Registry;
 using ItemDefList = System.Collections.Generic.List<ScheduleOne.ItemFramework.ItemDefinition>;
+using Registry = ScheduleOne.Registry;
 #else
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.InteropTypes;
@@ -576,7 +573,7 @@ namespace AutoRestock
 
             public override string ToString()
             {
-                return $"{type} at {property} ({gridLocation[0]}, {gridLocation[1]})";
+                return $"slot {slotIndex} of {type} at {property} ({grid}: {gridLocation[0]}, {gridLocation[1]})";
             }
         }
 
@@ -597,6 +594,7 @@ namespace AutoRestock
         private static Mutex exclusiveLock;
         public static bool isInitialized = false;
 
+        // TODO: slot not serializing properly for clients?
         public static SlotIdentifier SerializeSlot(ItemSlot slot)
         {
             GridItem gridItem;
@@ -618,11 +616,13 @@ namespace AutoRestock
 
             string type = gridItem.ItemInstance.Definition.ID;
             string property = gridItem.ParentProperty.name;
+            string grid = gridItem.OwnerGrid.name;
             Vector2 coordinate = (Vector2)Utils.GetField<GridItem>("_originCoordinate", gridItem);
             int slotIndex = (int)Utils.GetProperty<ItemSlot>("SlotIndex", slot);
-            string grid = gridItem.OwnerGrid.name;
+            SlotIdentifier slotID = new SlotIdentifier(property, coordinate, slotIndex, type, grid);
+            Utils.Log($"Serialized slot: {slotID.ToString()}");
 
-            return new SlotIdentifier(property, coordinate, slotIndex, type, grid);
+            return slotID;
         }
 
         public static ItemSlot DeserializeSlot(SlotIdentifier identifier)
@@ -750,19 +750,23 @@ namespace AutoRestock
                 timeManager.onDayPass += new Action(Manager.OnDayPass);
                 saveManager.onSaveStart.AddListener(Utils.ToUnityAction(Manager.OnSaveStart));
 
-                ledgerString = $"{GetSaveString()}_ledger";
-                transactionString = $"{GetSaveString()}_inprogress";
+                if (InstanceFinder.IsServer)
+                {
+                    ledgerString = $"{GetSaveString()}_ledger";
+                    transactionString = $"{GetSaveString()}_inprogress";
 
-                if (!melonPrefs.HasEntry(ledgerString))
-                {
-                    melonPrefs.CreateEntry<string>(ledgerString, "[]", "", true);
+                    if (!melonPrefs.HasEntry(ledgerString))
+                    {
+                        melonPrefs.CreateEntry<string>(ledgerString, "[]", "", true);
+                    }
+                    if (!melonPrefs.HasEntry(transactionString))
+                    {
+                        melonPrefs.CreateEntry<string>(transactionString, "[]", "", true);
+                    }
+                    melonPrefs.LoadFromFile(false);
+                
+                    ledger = JsonConvert.DeserializeObject<List<Transaction>>(melonPrefs.GetEntry<string>(ledgerString).Value);
                 }
-                if (!melonPrefs.HasEntry(transactionString))
-                {
-                    melonPrefs.CreateEntry<string>(transactionString, "[]", "", true);
-                }
-                melonPrefs.LoadFromFile(false);
-                ledger = JsonConvert.DeserializeObject<List<Transaction>>(melonPrefs.GetEntry<string>(ledgerString).Value);
 
                 isInitialized = true;
                 Utils.Log($"AutoRestock manager initialized.");
@@ -774,11 +778,14 @@ namespace AutoRestock
 
             try
             {
-                List<Transaction> pendingTransactions = JsonConvert.DeserializeObject<List<Transaction>>(melonPrefs.GetEntry<string>(transactionString).Value);
-                if (pendingTransactions.Count > 0)
+                if (InstanceFinder.IsServer)
                 {
-                    Utils.Log($"Completing {pendingTransactions.Count} pending transaction{(pendingTransactions.Count > 1 ? "s" : "")}.");
-                    CompleteTransactions(pendingTransactions);
+                    List<Transaction> pendingTransactions = JsonConvert.DeserializeObject<List<Transaction>>(melonPrefs.GetEntry<string>(transactionString).Value);
+                    if (pendingTransactions.Count > 0)
+                    {
+                        Utils.Log($"Completing {pendingTransactions.Count} pending transaction{(pendingTransactions.Count == 1 ? "" : "s")}.");
+                        CompleteTransactions(pendingTransactions);
+                    }
                 }
             }
             catch (Exception e)
@@ -1128,7 +1135,7 @@ namespace AutoRestock
         [HarmonyPostfix]
         public static void ClosePostfix(LoadingScreen __instance)
         {
-            if (InstanceFinder.IsServer && !Manager.isInitialized)
+            if (!Manager.isInitialized)
             {
                 Manager.Initialize();
             }
@@ -1138,7 +1145,7 @@ namespace AutoRestock
         [HarmonyPrefix]
         public static void ExitToMenuPrefix(LoadManager __instance)
         {
-            if (InstanceFinder.IsServer && Manager.isInitialized)
+            if (Manager.isInitialized)
             {
                 Manager.Stop();
             }
@@ -1152,7 +1159,7 @@ namespace AutoRestock
         [HarmonyPrefix]
         public static void RemoveIngredientsPrefix(Cauldron __instance)
         {
-            if (!InstanceFinder.IsServer || !Manager.isInitialized)
+            if (!Manager.isInitialized)
             {
                 return;
             }
@@ -1190,7 +1197,7 @@ namespace AutoRestock
         [HarmonyPrefix]
         public static void SendMixingOperationPrefix(MixingStation __instance, MixOperation operation)
         {
-            if (!InstanceFinder.IsServer || !Manager.isInitialized)
+            if (!Manager.isInitialized)
             {
                 return;
             }
@@ -1228,7 +1235,7 @@ namespace AutoRestock
         [HarmonyPrefix]
         public static void PackSingleInstancePrefix(PackagingStation __instance)
         {
-            if (!InstanceFinder.IsServer || !Manager.isInitialized)
+            if (!Manager.isInitialized)
             {
                 return;
             }
@@ -1297,7 +1304,7 @@ namespace AutoRestock
         [HarmonyPrefix]
         public static bool SendCookOperationPrefix(ChemistryStation __instance, ChemistryCookOperation op)
         {
-            if (!InstanceFinder.IsServer || !Manager.isInitialized)
+            if (!Manager.isInitialized)
             {
                 return true;
             }
@@ -1485,14 +1492,14 @@ namespace AutoRestock
                 // TODO: investigate if we can just use this patch and scrap all station-specific ones
                 // we'd still need to mark slots as used on player interactions.
                 // not hard to determine through UI methods.
-                // maybe??
+                // might have to do some shenanigans for multiplayer though
                 if (!Utils.IsStorageRack(__instance.SlotOwner))
                 {
                     return;
                 }
 
-                // Check if we should restock player-initiated grab
-                if (Manager.playerClickedSlot != __instance || !Manager.doRestockPlayerClickedSlot)
+                // Return if this slot was clicked but not ctrl+clicked
+                if (!((Manager.playerClickedSlot == __instance && Manager.doRestockPlayerClickedSlot) || Manager.playerClickedSlot != __instance))
                 {
                     return;
                 }
@@ -1500,12 +1507,12 @@ namespace AutoRestock
                 StorableItemInstance newItem = Utils.CastTo<StorableItemInstance>(__instance.ItemInstance.GetCopy(1));
                 if (!InstanceFinder.IsServer)
                 {
-                    Manager.Transaction transaction = Manager.CreateTransaction(__instance, newItem, newItem.StackLimit);
+                    Manager.Transaction transaction = Manager.CreateTransaction(__instance, __instance.ItemInstance, __instance.ItemInstance.StackLimit);
                     Utils.SendTransaction(transaction);
                 }
                 else
                 {
-                    Manager.TryRestocking(__instance, newItem, newItem.StackLimit);
+                    Manager.TryRestocking(__instance, Utils.CastTo<StorableItemInstance>(__instance.ItemInstance), __instance.ItemInstance.StackLimit);
                 }
             }
             catch (Exception e)
