@@ -76,24 +76,43 @@ namespace AutoRestock
 
         public static void LateInitialize()
         {
-            Mod.client?.RegisterMessageHandler<TransactionMessage>(new Action<TransactionMessage, CSteamID>(Utils.ReceiveTransaction));
+            if (Mod.client != null)
+            {
+                Mod.client.RegisterMessageHandler<TransactionMessage>(Utils.ReceiveTransaction);
+                Mod.client.RegisterMessageHandler<TextMessage>(Utils.ReceiveTextTransaction);
+            }
+            else 
+            {
+                Warn($"Client was null; couldn't register transaction message handler");
+            }
         }
 
         public class TransactionMessage : P2PMessage
         {
-            public override string MessageType => "CUSTOM";
-            public Manager.Transaction transaction = null;
+            public override string MessageType => "TRANSACTION";
+            public Manager.Transaction Payload { get; set; } = null;
 
             public override byte[] Serialize()
             {
-                var json = JsonConvert.SerializeObject(transaction);
+                Utils.Log($"serializing transactionmessage: {Payload.ToString()}");
+                var json = JsonConvert.SerializeObject(Payload);
                 return Encoding.UTF8.GetBytes(json);
             }
 
             public override void Deserialize(byte[] data)
             {
-                var json = Encoding.UTF8.GetString(data);
-                transaction = JsonConvert.DeserializeObject<Manager.Transaction>(json);
+                Utils.Log($"deserializing transactionmessage");
+                try 
+                {
+                    var json = Encoding.UTF8.GetString(data);
+                    Payload = JsonConvert.DeserializeObject<Manager.Transaction>(json);
+                    Utils.Log($"Payload: : {Payload.ToString()}");
+                }
+                catch (Exception e)
+                {
+                    Utils.Log($"deserializing failed:");
+                    Utils.PrintException(e);
+                }
             }
         }
 
@@ -476,7 +495,7 @@ namespace AutoRestock
             }
 
             Log($"Received transaction from {sender}.");
-            Manager.Transaction transaction = transactionMessage.transaction;
+            Manager.Transaction transaction = transactionMessage.Payload;
             StorableItemInstance itemInstance = GetItemInstance(transaction.itemID);
             ItemSlot slot = Manager.DeserializeSlot(transaction.slotID);
             if (slot == null)
@@ -487,11 +506,37 @@ namespace AutoRestock
             Manager.TryRestocking(slot, itemInstance, transaction.quantity);
         }
 
+        public static void ReceiveTextTransaction(TextMessage message, CSteamID sender)
+        {
+            Log($"ReceiveTextTransaction: received transaction from {Mod.steamIDToDisplayName[sender]}.");
+            try 
+            {
+                Manager.Transaction transaction = JsonConvert.DeserializeObject<Manager.Transaction>(message.Content);
+                if (transaction == null)
+                {
+                    Log($"Couldn't deserialize json: {message.Content}");
+                }
+                StorableItemInstance itemInstance = GetItemInstance(transaction.itemID);
+                ItemSlot slot = Manager.DeserializeSlot(transaction.slotID);
+                if (slot == null)
+                {
+                    Log($"Couldn't deserialize slot.");
+                    return;
+                }
+                Manager.TryRestocking(slot, itemInstance, transaction.quantity);
+            }
+            catch (Exception e)
+            {
+                Utils.PrintException(e);
+            }
+        }
+
         public static void SendTransaction(Manager.Transaction transaction)
         {
-            TransactionMessage transactionMessage = new TransactionMessage { transaction = transaction };
-            Log($"Sending transaction for {transaction.itemID} x{transaction.quantity} at {transaction.property}.");
-            Mod.client?.BroadcastMessageAsync(transactionMessage);
+            TransactionMessage transactionMessage = new TransactionMessage { Payload = transaction };
+            Log($"Sending transaction for {transaction.itemID} x{transaction.quantity} at {transaction.slotID.ToString()}.");
+            Mod.client?.SendMessageToPlayerAsync(Mod.host, transactionMessage);
+            Mod.client?.SendTextMessageAsync(Mod.host, JsonConvert.SerializeObject(transaction));
         }
 
 #if MONO
@@ -522,7 +567,6 @@ namespace AutoRestock
             public float discount;
             public float unitPrice;
             public float totalCost;
-            public string property;
             public bool useCash;
             public SlotIdentifier slotID;
 
@@ -573,7 +617,7 @@ namespace AutoRestock
 
             public override string ToString()
             {
-                return $"slot {slotIndex} of {type} at {property} ({grid}: {gridLocation[0]}, {gridLocation[1]})";
+                return $"{type} slot {slotIndex} at {property} ({grid}: {gridLocation[0]}, {gridLocation[1]})";
             }
         }
 
@@ -594,7 +638,6 @@ namespace AutoRestock
         private static Mutex exclusiveLock;
         public static bool isInitialized = false;
 
-        // TODO: slot not serializing properly for clients?
         public static SlotIdentifier SerializeSlot(ItemSlot slot)
         {
             GridItem gridItem;
@@ -620,8 +663,6 @@ namespace AutoRestock
             Vector2 coordinate = (Vector2)Utils.GetField<GridItem>("_originCoordinate", gridItem);
             int slotIndex = (int)Utils.GetProperty<ItemSlot>("SlotIndex", slot);
             SlotIdentifier slotID = new SlotIdentifier(property, coordinate, slotIndex, type, grid);
-            Utils.Log($"Serialized slot: {slotID.ToString()}");
-
             return slotID;
         }
 
@@ -1512,7 +1553,11 @@ namespace AutoRestock
                 }
                 else
                 {
-                    Manager.TryRestocking(__instance, Utils.CastTo<StorableItemInstance>(__instance.ItemInstance), __instance.ItemInstance.StackLimit);
+                    // DEBUG
+                    Manager.Transaction transaction = Manager.CreateTransaction(__instance, __instance.ItemInstance, __instance.ItemInstance.StackLimit);
+                    Utils.SendTransaction(transaction);
+
+                    //Manager.TryRestocking(__instance, Utils.CastTo<StorableItemInstance>(__instance.ItemInstance), __instance.ItemInstance.StackLimit);
                 }
             }
             catch (Exception e)

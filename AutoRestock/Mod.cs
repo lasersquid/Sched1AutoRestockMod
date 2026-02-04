@@ -2,6 +2,8 @@
 using System.Reflection;
 using SteamNetworkLib;
 using SteamNetworkLib.Models;
+using Il2CppSteamworks;
+using SteamNetworkLib.Core;
 
 [assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.1.3", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
@@ -13,6 +15,8 @@ namespace AutoRestock
         public MelonPreferences_Category melonPrefs;
         public HarmonyLib.Harmony harmony = new HarmonyLib.Harmony("com.lasersquid.autorestock");
         public SteamNetworkClient client;
+        public CSteamID host;
+        public CSteamID self;
 
         public override void OnInitializeMelon()
         {
@@ -20,6 +24,8 @@ namespace AutoRestock
             Utils.Initialize(this);
             LoggerInstance.Msg("Mod initialized.");
         }
+
+        public Dictionary<CSteamID, string> steamIDToDisplayName;
 
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
         {
@@ -29,20 +35,56 @@ namespace AutoRestock
             {
                 if (client == null)
                 {
+                    // NetworkRules rules = new NetworkRules { EnableRelay = true, DefaultSendType = EP2PSend.k_EP2PSendReliable, AcceptOnlyFriends = false, MinReceiveChannel = 0, MaxReceiveChannel = 5, MessagePolicy = null };
+                    NetworkRules rules = new NetworkRules { EnableRelay = true, DefaultSendType = EP2PSend.k_EP2PSendReliable, AcceptOnlyFriends = false, MinReceiveChannel = 0, MaxReceiveChannel = 3 };
                     LoggerInstance.Msg($"Creating SteamNetworkClient object.");
-                    client = new SteamNetworkClient();
+                    client = new SteamNetworkClient(rules);
                     if (client.Initialize())
                     {
                         client.OnLobbyCreated += (s, e) => LoggerInstance.Msg($"Lobby created: {e.Lobby.LobbyId}");
-                        client.RegisterMessageHandler<TextMessage>((msg, sender) => 
+                        client.OnLobbyJoined += (s, e) => 
                         {
-                            LoggerInstance.Msg($"Received message from {sender}: {msg.Content}");
-                        });
-                        client.OnLobbyJoined += (s, e) => LoggerInstance.Msg($"Joined lobby {e.Lobby.LobbyId}");
-                        client.OnMemberJoined += (s, e) => LoggerInstance.Msg($"Member {e.Member.DisplayName} joined lobby");
-                    }
+                            LoggerInstance.Msg($"Joined lobby {e.Lobby.LobbyId}");
+                            host = client.GetLobbyMembers().FirstOrDefault((member) => member.IsOwner).SteamId;
+                            self = client.GetLobbyMembers().FirstOrDefault((member) => member.IsLocalPlayer).SteamId;
 
-                    Utils.LateInitialize();
+                            steamIDToDisplayName = new Dictionary<CSteamID, string>(client.GetLobbyMembers().ConvertAll<KeyValuePair<CSteamID, string>>((member) => new KeyValuePair<CSteamID, string>(member.SteamId, member.DisplayName)));
+                            Manager.SlotIdentifier slotID = new Manager.SlotIdentifier("DocksWarehouse", new UnityEngine.Vector2(0,2), 0, "largestoragerack", "MainGrid");
+                            Manager.Transaction transaction = new Manager.Transaction("motoroil", Il2CppScheduleOne.ItemFramework.EQuality.Standard, 1, 0, 1, 1f, true, slotID);
+                            if (host != self)
+                            {
+                                client.SendTextMessageAsync(host, $"callback: {steamIDToDisplayName[self]} joined the session");
+                            }
+                            else
+                            {
+                                client.SendTextMessageAsync(host, $"host callback: {steamIDToDisplayName[self]} joined the session");
+                                client.SendMessageToPlayerAsync(host, new Utils.TransactionMessage() { Payload = transaction });
+                            }
+                        };
+
+                        client.OnMemberJoined += (s, e) =>
+                        {
+                            steamIDToDisplayName[e.Member.SteamId] = e.Member.DisplayName;
+                            LoggerInstance.Msg($"Member {e.Member.DisplayName} joined lobby");
+                            client.BroadcastTextMessage($"broadcast: {e.Member.DisplayName} joined lobby");
+                        }; 
+                        
+                        client.OnP2PMessageReceived += (s, e) => 
+                        {
+                            LoggerInstance.Msg($"Received P2P {e.Message.MessageType} message from {steamIDToDisplayName[e.SenderId]}.");
+                            if (e.Message.MessageType == "TRANSACTION")
+                            {
+                                Utils.TransactionMessage message = (Utils.TransactionMessage)e.Message;
+                                Manager.Transaction transaction = message.Payload;
+                                Utils.Log($"P2PMessageReceived callback lambda: Transaction: {transaction.ToString()}");
+                            }
+                            if (e.Message.MessageType == "TEXT")
+                            {
+                                Utils.Log($"Text msg: {((TextMessage)e.Message).Content}");
+                            }
+                        };
+                        Utils.LateInitialize();
+                    }
                 }
             }
         }
@@ -51,6 +93,7 @@ namespace AutoRestock
         {
             base.OnUpdate();
             client?.ProcessIncomingMessages();
+            client?.P2PManager.ProcessIncomingPackets();
         }
 
         public override void OnDeinitializeMelon()
