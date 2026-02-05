@@ -79,13 +79,11 @@ namespace AutoRestock
             if (Mod.client != null)
             {
                 Mod.client.RegisterMessageHandler<TransactionMessage>(Utils.ReceiveTransaction);
-
-                // Debug
                 Mod.client.RegisterMessageHandler<TextMessage>(Utils.ReceiveTextTransaction);
             }
             else 
             {
-                Warn($"Client was null; couldn't register multiplayer transaction message handler.");
+                Warn($"Client was null; couldn't register transaction message handler");
             }
         }
 
@@ -496,44 +494,23 @@ namespace AutoRestock
                 return;
             }
 
-            try
+            Log($"Received transaction from {sender}.");
+            Manager.Transaction transaction = transactionMessage.Payload;
+            StorableItemInstance itemInstance = GetItemInstance(transaction.itemID);
+            ItemSlot slot = Manager.DeserializeSlot(transaction.slotID);
+            if (slot == null)
             {
-                Log($"Received transaction from {Utils.SteamIDToDisplayName(sender)}.");
-                Manager.Transaction transaction = transactionMessage.Payload;
-                StorableItemInstance itemInstance = GetItemInstance(transaction.itemID);
-                ItemSlot slot = Manager.DeserializeSlot(transaction.slotID);
-                if (slot == null)
-                {
-                    Warn($"Couldn't deserialize slot ({transaction.slotID.ToString()})");
-                    return;
-                }
-                Manager.TryRestocking(slot, itemInstance, transaction.quantity);
+                Log($"Couldn't deserialize slot.");
+                return;
             }
-            catch (Exception e)
-            {
-                Utils.Warn($"Error receiving transaction:");
-                Utils.PrintException(e);
-            }
-        }
-
-        public static string SteamIDToDisplayName(CSteamID steamID)
-        {
-            if (Mod.steamIDToDisplayName.ContainsKey(steamID))
-            {
-                return Mod.steamIDToDisplayName[steamID];
-            }
-            else
-            {
-                return $"{steamID}";
-            }
+            Manager.TryRestocking(slot, itemInstance, transaction.quantity);
         }
 
         public static void ReceiveTextTransaction(TextMessage message, CSteamID sender)
         {
-            
+            Log($"ReceiveTextTransaction: received transaction from {Mod.steamIDToDisplayName[sender]}.");
             try 
             {
-                Log($"ReceiveTextTransaction: received transaction from {Mod.steamIDToDisplayName[sender]}.");
                 Manager.Transaction transaction = JsonConvert.DeserializeObject<Manager.Transaction>(message.Content);
                 if (transaction == null)
                 {
@@ -543,32 +520,23 @@ namespace AutoRestock
                 ItemSlot slot = Manager.DeserializeSlot(transaction.slotID);
                 if (slot == null)
                 {
-                    Log($"Couldn't deserialize slot ({transaction.slotID.ToString()})");
+                    Log($"Couldn't deserialize slot.");
                     return;
                 }
                 Manager.TryRestocking(slot, itemInstance, transaction.quantity);
             }
             catch (Exception e)
             {
-                Utils.Warn($"Error receiving text transaction:");
                 Utils.PrintException(e);
             }
         }
 
         public static void SendTransaction(Manager.Transaction transaction)
         {
-            try 
-            {
-                TransactionMessage transactionMessage = new TransactionMessage { Payload = transaction };
-                Log($"Sending transaction for {transaction.itemID} x{transaction.quantity} at {transaction.slotID.ToString()}.");
-                Mod.client?.SendMessageToPlayerAsync(Mod.host, transactionMessage);
-                Mod.client?.SendTextMessageAsync(Mod.host, JsonConvert.SerializeObject(transaction));
-            }
-            catch (Exception e)
-            {
-                Utils.Warn($"Couldn't send transaction:");
-                Utils.PrintException(e);
-            }
+            TransactionMessage transactionMessage = new TransactionMessage { Payload = transaction };
+            Log($"Sending transaction for {transaction.itemID} x{transaction.quantity} at {transaction.slotID.ToString()}.");
+            Mod.client?.SendMessageToPlayerAsync(Mod.host, transactionMessage);
+            Mod.client?.SendTextMessageAsync(Mod.host, JsonConvert.SerializeObject(transaction));
         }
 
 #if MONO
@@ -842,7 +810,7 @@ namespace AutoRestock
                 }
 
                 isInitialized = true;
-                Utils.Log($"AutoRestock manager initialized {(InstanceFinder.IsServer ? "for host" : "for client")}.");
+                Utils.Log($"AutoRestock manager initialized.");
             }
             catch (Exception e)
             {
@@ -1586,10 +1554,10 @@ namespace AutoRestock
                 else
                 {
                     // DEBUG
-                    // Manager.Transaction transaction = Manager.CreateTransaction(__instance, __instance.ItemInstance, __instance.ItemInstance.StackLimit);
-                    // Utils.SendTransaction(transaction);
+                    Manager.Transaction transaction = Manager.CreateTransaction(__instance, __instance.ItemInstance, __instance.ItemInstance.StackLimit);
+                    Utils.SendTransaction(transaction);
 
-                    Manager.TryRestocking(__instance, Utils.CastTo<StorableItemInstance>(__instance.ItemInstance), __instance.ItemInstance.StackLimit);
+                    //Manager.TryRestocking(__instance, Utils.CastTo<StorableItemInstance>(__instance.ItemInstance), __instance.ItemInstance.StackLimit);
                 }
             }
             catch (Exception e)
