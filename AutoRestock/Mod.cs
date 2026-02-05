@@ -35,54 +35,28 @@ namespace AutoRestock
             {
                 if (client == null)
                 {
-                    // NetworkRules rules = new NetworkRules { EnableRelay = true, DefaultSendType = EP2PSend.k_EP2PSendReliable, AcceptOnlyFriends = false, MinReceiveChannel = 0, MaxReceiveChannel = 5, MessagePolicy = null };
                     NetworkRules rules = new NetworkRules { EnableRelay = true, DefaultSendType = EP2PSend.k_EP2PSendReliable, AcceptOnlyFriends = false, MinReceiveChannel = 0, MaxReceiveChannel = 3 };
-                    LoggerInstance.Msg($"Creating SteamNetworkClient object.");
                     client = new SteamNetworkClient(rules);
                     if (client.Initialize())
                     {
-                        client.OnLobbyCreated += (s, e) => LoggerInstance.Msg($"Lobby created: {e.Lobby.LobbyId}");
                         client.OnLobbyJoined += (s, e) => 
                         {
-                            LoggerInstance.Msg($"Joined lobby {e.Lobby.LobbyId}");
                             host = client.GetLobbyMembers().FirstOrDefault((member) => member.IsOwner).SteamId;
                             self = client.GetLobbyMembers().FirstOrDefault((member) => member.IsLocalPlayer).SteamId;
-
                             steamIDToDisplayName = new Dictionary<CSteamID, string>(client.GetLobbyMembers().ConvertAll<KeyValuePair<CSteamID, string>>((member) => new KeyValuePair<CSteamID, string>(member.SteamId, member.DisplayName)));
-                            Manager.SlotIdentifier slotID = new Manager.SlotIdentifier("DocksWarehouse", new UnityEngine.Vector2(0,2), 0, "largestoragerack", "MainGrid");
-                            Manager.Transaction transaction = new Manager.Transaction("motoroil", Il2CppScheduleOne.ItemFramework.EQuality.Standard, 1, 0, 1, 1f, true, slotID);
-                            if (host != self)
-                            {
-                                client.SendTextMessageAsync(host, $"callback: {steamIDToDisplayName[self]} joined the session");
-                            }
-                            else
-                            {
-                                client.SendTextMessageAsync(host, $"host callback: {steamIDToDisplayName[self]} joined the session");
-                                client.SendMessageToPlayerAsync(host, new Utils.TransactionMessage() { Payload = transaction });
-                            }
                         };
 
                         client.OnMemberJoined += (s, e) =>
                         {
                             steamIDToDisplayName[e.Member.SteamId] = e.Member.DisplayName;
-                            LoggerInstance.Msg($"Member {e.Member.DisplayName} joined lobby");
-                            client.BroadcastTextMessage($"broadcast: {e.Member.DisplayName} joined lobby");
-                        }; 
-                        
-                        client.OnP2PMessageReceived += (s, e) => 
-                        {
-                            LoggerInstance.Msg($"Received P2P {e.Message.MessageType} message from {steamIDToDisplayName[e.SenderId]}.");
-                            if (e.Message.MessageType == "TRANSACTION")
-                            {
-                                Utils.TransactionMessage message = (Utils.TransactionMessage)e.Message;
-                                Manager.Transaction transaction = message.Payload;
-                                Utils.Log($"P2PMessageReceived callback lambda: Transaction: {transaction.ToString()}");
-                            }
-                            if (e.Message.MessageType == "TEXT")
-                            {
-                                Utils.Log($"Text msg: {((TextMessage)e.Message).Content}");
-                            }
                         };
+
+                        // Debug
+                        client.OnP2PMessageReceived += (s, e) =>
+                        {
+                            Utils.Log($"Received {e.Message.MessageType} P2P message from {steamIDToDisplayName[e.SenderId]}.");
+                        };
+                        
                         Utils.LateInitialize();
                     }
                 }
