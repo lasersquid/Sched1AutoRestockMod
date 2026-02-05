@@ -79,7 +79,6 @@ namespace AutoRestock
             if (Mod.client != null)
             {
                 Mod.client.RegisterMessageHandler<TransactionMessage>(Utils.ReceiveTransaction);
-                // Mod.client.RegisterMessageHandler<TextMessage>(Utils.ReceiveTextTransaction);
             }
             else 
             {
@@ -94,23 +93,20 @@ namespace AutoRestock
 
             public override byte[] Serialize()
             {
-                Utils.Log($"serializing transactionmessage: {Payload.ToString()}");
                 var json = JsonConvert.SerializeObject(Payload);
                 return Encoding.UTF8.GetBytes(json);
             }
 
             public override void Deserialize(byte[] data)
             {
-                Utils.Log($"deserializing transactionmessage");
                 try 
                 {
                     var json = Encoding.UTF8.GetString(data);
                     Payload = JsonConvert.DeserializeObject<Manager.Transaction>(json);
-                    Utils.Log($"Payload: : {Payload.ToString()}");
                 }
                 catch (Exception e)
                 {
-                    Utils.Log($"deserializing failed:");
+                    Utils.Warn($"deserializing failed:");
                     Utils.PrintException(e);
                 }
             }
@@ -502,17 +498,16 @@ namespace AutoRestock
         {
             if (!Manager.isInitialized)
             {
-                Log($"Couldn't process transaction, Manager is not initialized!");
+                Warn($"Couldn't process transaction, Manager is not initialized!");
                 return;
             }
 
-            Log($"Received transaction from {sender}; processing...");
             Manager.Transaction transaction = transactionMessage.Payload;
             StorableItemInstance itemInstance = GetItemInstance(transaction.itemID);
             ItemSlot slot = Manager.DeserializeSlot(transaction.slotID);
             if (slot == null)
             {
-                Log($"Couldn't resolve itemslot; aborting...");
+                Warn($"Couldn't resolve itemslot; aborting...");
                 return;
             }
             Manager.TryRestocking(slot, itemInstance, transaction.quantity);
@@ -520,19 +515,19 @@ namespace AutoRestock
 
         public static void ReceiveTextTransaction(TextMessage message, CSteamID sender)
         {
-            Log($"ReceiveTextTransaction: received transaction from {Utils.SteamIDToDisplayName(sender)}.");
             try 
             {
                 Manager.Transaction transaction = JsonConvert.DeserializeObject<Manager.Transaction>(message.Content);
                 if (transaction == null)
                 {
-                    Log($"Couldn't deserialize json: {message.Content}");
+                    Warn($"Couldn't deserialize json: {message.Content}");
+                    return;
                 }
                 StorableItemInstance itemInstance = GetItemInstance(transaction.itemID);
                 ItemSlot slot = Manager.DeserializeSlot(transaction.slotID);
                 if (slot == null)
                 {
-                    Log($"Couldn't resolve itemslot; aborting...");
+                    Warn($"Couldn't resolve itemslot; aborting...");
                     return;
                 }
                 Manager.TryRestocking(slot, itemInstance, transaction.quantity);
@@ -546,9 +541,7 @@ namespace AutoRestock
         public static void SendTransaction(Manager.Transaction transaction)
         {
             TransactionMessage transactionMessage = new TransactionMessage { Payload = transaction };
-            Log($"Sending transaction for {transaction.itemID} x{transaction.quantity} at {transaction.slotID.ToString()}.");
             Mod.client?.SendMessageToPlayerAsync(Mod.host, transactionMessage);
-            Mod.client?.SendTextMessageAsync(Mod.host, JsonConvert.SerializeObject(transaction));
         }
 
 #if MONO
@@ -1565,10 +1558,6 @@ namespace AutoRestock
                 }
                 else
                 {
-                    // DEBUG
-                    // Manager.Transaction transaction = Manager.CreateTransaction(__instance, __instance.ItemInstance, __instance.ItemInstance.StackLimit);
-                    // Utils.SendTransaction(transaction);
-
                     Manager.TryRestocking(__instance, Utils.CastTo<StorableItemInstance>(__instance.ItemInstance), __instance.ItemInstance.StackLimit);
                 }
             }
