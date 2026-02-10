@@ -4,6 +4,7 @@
     "website_url": "https://github.com/lasersquid/Sched1AutoRestockMod",
     "description": "If you're tired of spending all your time restocking shelves and stations, this mod will automatically restock empty slots for you and charge your cash balance or bank account. Configurable through any mod management mod (phone app, etc).",
     "dependencies": [
-	"LavaGang-MelonLoader-0.7.0"
+	"LavaGang-MelonLoader-0.7.0",
+	"ifBars-SteamNetworkLib_%%STEAMNETLIBVERSION%%-1.2.1"
     ]
 }

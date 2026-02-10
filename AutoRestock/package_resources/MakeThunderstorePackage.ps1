@@ -9,9 +9,11 @@ param (
  # Check params
  if ("$arch" -eq "IL2CPP") {
     $net_ver = "net6"
+    $steamnetlib_ver = "Il2Cpp"
 }
 elseif ("$arch" -eq "Mono") {
     $net_ver = "netstandard2.1"
+    $steamnetlib_ver = "Mono"
 }
 else {
     Write-Output 'Specify "-arch IL2CPP" or "-arch Mono"!'
@@ -54,6 +56,7 @@ if (Test-Path -Path $extras_path) {
 $json = [System.IO.File]::ReadAllText($manifest_path)
 $json = $json.Replace('%%VERSION%%', $ver)
 $json = $json.Replace('%%ARCH%%', $arch)
+$json = $json.Replace('%%STEAMNETLIBVERSION%%', $steamnetlib_ver)
 [System.IO.File]::WriteAllText($manifest_dest, $json)
 
 # Zip it all up
