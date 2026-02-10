@@ -2,8 +2,13 @@
 using System.Reflection;
 using SteamNetworkLib;
 using SteamNetworkLib.Models;
-using Il2CppSteamworks;
 using SteamNetworkLib.Core;
+
+#if MONO_BUILD
+using Steamworks;
+#else
+using Il2CppSteamworks;
+#endif
 
 [assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.1.3", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]

@@ -7,7 +7,6 @@ using UnityEngine.InputSystem;
 using System.Reflection;
 using Newtonsoft.Json;
 using SteamNetworkLib;
-using Il2CppSteamworks;
 using SteamNetworkLib.Models;
 using System.Text;
 
@@ -31,6 +30,7 @@ using ScheduleOne.Storage;
 using ScheduleOne.UI.Items;
 using ScheduleOne.UI;
 using ScheduleOne;
+using Steamworks;
 using ItemDefList = System.Collections.Generic.List<ScheduleOne.ItemFramework.ItemDefinition>;
 using Registry = ScheduleOne.Registry;
 #else
@@ -55,6 +55,7 @@ using Il2CppScheduleOne.Storage;
 using Il2CppScheduleOne.UI.Items;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne;
+using Il2CppSteamworks;
 using ItemDefList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.ItemFramework.ItemDefinition>;
 using Registry = Il2CppScheduleOne.Registry;
 #endif
@@ -685,7 +686,7 @@ namespace AutoRestock
                     if (Utils.Is<GridItem>(b))
                     {
                         GridItem g = Utils.CastTo<GridItem>(b);
-                        return g._originCoordinate == targetCoord && g.OwnerGrid.name == identifier.grid;
+                        return (Vector2)Utils.GetField<GridItem>("_originCoordinate", g) == targetCoord && g.OwnerGrid.name == identifier.grid;
                     }
                     return false;
                 });
