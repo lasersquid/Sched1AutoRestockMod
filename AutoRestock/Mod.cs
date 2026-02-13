@@ -49,30 +49,41 @@ namespace AutoRestock
                             Utils.Debug($"Joined lobby {e.Lobby.LobbyId}");
                             host = client.GetLobbyMembers().FirstOrDefault((member) => member.IsOwner).SteamId;
                             self = client.GetLobbyMembers().FirstOrDefault((member) => member.IsLocalPlayer).SteamId;
-                            steamIDToDisplayName = new Dictionary<CSteamID, string>(client.GetLobbyMembers().ConvertAll<KeyValuePair<CSteamID, string>>((member) => new KeyValuePair<CSteamID, string>(member.SteamId, member.DisplayName)));
+                            steamIDToDisplayName = new Dictionary<CSteamID, string>(client.GetLobbyMembers().ConvertAll<KeyValuePair<CSteamID, string>>((member) => 
+                                new KeyValuePair<CSteamID, string>(member.SteamId, member.DisplayName))
+                            );
                         };
 
                         client.OnMemberJoined += (s, e) =>
                         {
                             steamIDToDisplayName[e.Member.SteamId] = e.Member.DisplayName;
-                            // client.BroadcastTextMessage($"{e.Member.DisplayName} joined lobby");
+                            Utils.Debug($"{e.Member.DisplayName} joined lobby");
+                            client.BroadcastTextMessage($"{e.Member.DisplayName} joined lobby");
                         }; 
                         
                         client.OnP2PMessageReceived += (s, e) => 
                         {
-                            Utils.Debug($"Received P2P {e.Message.MessageType.ToLower()} message from {steamIDToDisplayName[e.SenderId]}.");
-                            if (e.Message.MessageType == "TRANSACTION")
+                            try
                             {
-                                Utils.TransactionMessage message = (Utils.TransactionMessage)e.Message;
-                                Manager.Transaction transaction = message.Payload;
-                                Utils.Debug($"Transaction: {transaction.ToString()}");
+                                Utils.Debug($"Received P2P {e.Message.MessageType.ToLower()} message from {Utils.SteamIDToDisplayName(e.SenderId)}.");
+                                if (e.Message.MessageType == "TRANSACTION")
+                                {
+                                    Utils.TransactionMessage message = (Utils.TransactionMessage)e.Message;
+                                    Manager.Transaction transaction = message.Payload;
+                                    Utils.Debug($"P2P transaction: {transaction.ToString()}");
+                                }
+                                if (e.Message.MessageType == "TEXT")
+                                {
+                                    Utils.Debug($"P2P text msg: {((TextMessage)e.Message).Content}");
+                                }
                             }
-                            if (e.Message.MessageType == "TEXT")
+                            catch (Exception ex)
                             {
-                                Utils.Debug($"Text msg: {((TextMessage)e.Message).Content}");
+                                Utils.PrintException(ex);
                             }
                         };
                         Utils.LateInitialize();
+                        Utils.Log($"Initialized SteamNetworkClient");
                     }
                 }
             }

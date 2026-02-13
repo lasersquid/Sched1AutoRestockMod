@@ -145,7 +145,7 @@ namespace AutoRestock
 
         public static void Debug(string message)
         {
-            if (Manager.isInitialized && Manager.melonPrefs.GetEntry<bool>("debugLogs").Value)
+            if (Mod.melonPrefs.GetEntry<bool>("debugLogs").Value)
             {
                 Mod.LoggerInstance.Msg($"DEBUG: {message}");
             }
@@ -153,7 +153,7 @@ namespace AutoRestock
 
         public static void VerboseLog(string message)
         {
-            if (Manager.isInitialized && Manager.melonPrefs.GetEntry<bool>("verboseLogs").Value)
+            if (Mod.melonPrefs.GetEntry<bool>("verboseLogs").Value)
             {
                 Mod.LoggerInstance.Msg(message);
             }
@@ -499,19 +499,27 @@ namespace AutoRestock
         {
             if (!Manager.isInitialized)
             {
-                Warn($"Couldn't process transaction, Manager is not initialized!");
+                Warn($"Couldn't process remote transaction, Manager is not initialized!");
                 return;
             }
 
-            Manager.Transaction transaction = transactionMessage.Payload;
-            StorableItemInstance itemInstance = GetItemInstance(transaction.itemID);
-            ItemSlot slot = Manager.DeserializeSlot(transaction.slotID);
-            if (slot == null)
+            try
             {
-                Warn($"Couldn't resolve itemslot; aborting...");
-                return;
+                Manager.Transaction transaction = transactionMessage.Payload;
+                Utils.Debug($"Processing transaction: {transaction.ToString()}");
+                StorableItemInstance itemInstance = GetItemInstance(transaction.itemID);
+                ItemSlot slot = Manager.DeserializeSlot(transaction.slotID);
+                if (slot == null)
+                {
+                    Warn($"Couldn't resolve itemslot; aborting...");
+                    return;
+                }
+                Manager.TryRestocking(slot, itemInstance, transaction.quantity);
             }
-            Manager.TryRestocking(slot, itemInstance, transaction.quantity);
+            catch (Exception e)
+            {
+                Utils.PrintException(e);
+            }
         }
 
         public static void ReceiveTextTransaction(TextMessage message, CSteamID sender)
@@ -543,6 +551,7 @@ namespace AutoRestock
         {
             TransactionMessage transactionMessage = new TransactionMessage { Payload = transaction };
             Mod.client?.SendMessageToPlayerAsync(Mod.host, transactionMessage);
+            // Mod.client?.BroadcastTextMessageAsync($"submitted transaction: {transaction.ToString()}");
         }
 
 #if MONO
@@ -1552,14 +1561,16 @@ namespace AutoRestock
                 }
 
                 StorableItemInstance newItem = Utils.CastTo<StorableItemInstance>(__instance.ItemInstance.GetCopy(1));
+                Manager.Transaction transaction = Manager.CreateTransaction(__instance, __instance.ItemInstance, __instance.ItemInstance.StackLimit);
                 if (!InstanceFinder.IsServer)
                 {
-                    Manager.Transaction transaction = Manager.CreateTransaction(__instance, __instance.ItemInstance, __instance.ItemInstance.StackLimit);
+                    // Manager.Transaction transaction = Manager.CreateTransaction(__instance, __instance.ItemInstance, __instance.ItemInstance.StackLimit);
                     Utils.SendTransaction(transaction);
                 }
                 else
                 {
                     Manager.TryRestocking(__instance, Utils.CastTo<StorableItemInstance>(__instance.ItemInstance), __instance.ItemInstance.StackLimit);
+                    // Utils.SendTransaction(transaction);
                 }
             }
             catch (Exception e)
