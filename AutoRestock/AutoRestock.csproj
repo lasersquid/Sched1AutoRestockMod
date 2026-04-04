@@ -1,10 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<ProjName>AutoRestock</ProjName>
-		<Version>1.1.4</Version>
+		<Version>1.1.5</Version>
 		<GameDir>C:/Program Files (x86)/Steam/steamapps/common/Schedule I</GameDir>
 		<GamePath>$(GameDir)/Schedule I.exe</GamePath>
-		<Configuration>Mono</Configuration>
+		<Configuration>IL2CPP</Configuration>
 	</PropertyGroup>
 
 	<!-- Conditionally set some properties depending on Configuration. -->
@@ -75,6 +75,9 @@
 		<Reference Include="Il2Cppmscorlib">
 			<HintPath>il2cpp_libs/Il2Cppmscorlib.dll</HintPath>
 		</Reference>
+		<Reference Include="Il2CppScheduleOne.Core">
+			<HintPath>il2cpp_libs/Il2CppScheduleOne.Core.dll</HintPath>
+		</Reference>
 		<Reference Include="Newtonsoft.Json">
 			<HintPath>il2cpp_libs/Newtonsoft.Json.dll</HintPath>
 		</Reference>
@@ -132,6 +135,9 @@
 		<Reference Include="Newtonsoft.Json">
 			<HintPath>mono_libs/Newtonsoft.Json.dll</HintPath>
 		</Reference>
+		<Reference Include="ScheduleOne.Core">
+			<HintPath>mono_libs/ScheduleOne.Core.dll</HintPath>
+		</Reference>
 		<Reference Include="SteamNetworkLib">
 			<HintPath>mono_libs/SteamNetworkLib-Mono.dll</HintPath>
 		</Reference>
@@ -173,6 +179,7 @@
 		<PackageReference Include="LavaGang.MelonLoader" Version="0.7.1" />
 		<PackageReference Include="Lib.Harmony" Version="2.4.1" />
 		<PackageReference Include="Microsoft.Diagnostics.Runtime" Version="3.1.512801" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.0.0" />
 	</ItemGroup>
 
 	<PropertyGroup>

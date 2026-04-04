@@ -10,7 +10,7 @@ using Steamworks;
 using Il2CppSteamworks;
 #endif
 
-[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.1.4", "lasersquid", null)]
+[assembly: MelonInfo(typeof(AutoRestock.AutoRestockMod), "AutoRestock", "1.1.5", "lasersquid", null)]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
 namespace AutoRestock
@@ -171,6 +171,8 @@ namespace AutoRestock
 //  - Add player restock shelves hotkey - done
 //  - Test player restock shelves hotkey in multiplayer - done
 //  - Fix bug deserializing itemslots for multi-grid properties - done (v1.1.3)
+//  - Fix dependency in thunderstore package manifest - done (v1.1.4)
+//  - Update for 0.4.4f10/0.4.5f1 - done (1.1.5)
 
 
 // Bugs

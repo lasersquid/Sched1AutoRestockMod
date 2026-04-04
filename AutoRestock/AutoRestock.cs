@@ -12,6 +12,8 @@ using System.Text;
 
 #if MONO_BUILD
 using FishNet;
+using ScheduleOne.Core;
+using ScheduleOne.Core.Items.Framework;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.EntityFramework;
 using ScheduleOne.GameTime;
@@ -31,12 +33,15 @@ using ScheduleOne.UI.Items;
 using ScheduleOne.UI;
 using ScheduleOne;
 using Steamworks;
+using BuildableItemList = System.Collections.Generic.List<ScheduleOne.EntityFramework.BuildableItem>;
 using ItemDefList = System.Collections.Generic.List<ScheduleOne.ItemFramework.ItemDefinition>;
 using Registry = ScheduleOne.Registry;
 #else
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.InteropTypes;
 using Il2CppInterop.Runtime;
+using Il2CppScheduleOne.Core;
+using Il2CppScheduleOne.Core.Items.Framework;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.EntityFramework;
 using Il2CppScheduleOne.GameTime;
@@ -56,6 +61,7 @@ using Il2CppScheduleOne.UI.Items;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne;
 using Il2CppSteamworks;
+using BuildableItemList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.EntityFramework.BuildableItem>;
 using ItemDefList = Il2CppSystem.Collections.Generic.List<Il2CppScheduleOne.ItemFramework.ItemDefinition>;
 using Registry = Il2CppScheduleOne.Registry;
 #endif
@@ -687,7 +693,7 @@ namespace AutoRestock
             {
                 List<Property> properties = UnityEngine.Object.FindObjectsOfType<Property>().ToList();
                 Property property = properties.FirstOrDefault<Property>((Property p) => p.name == identifier.property && p.Grids.Count > 0);
-                List<BuildableItem> gridItemsOnProperty = Utils.ListConvert<BuildableItem>(property.BuildableItems);
+                List<BuildableItem> gridItemsOnProperty = Utils.ListConvert<BuildableItem>((BuildableItemList)Utils.GetField<Property>("BuildableItems", property));
 
                 Vector2 targetCoord = new Vector2(identifier.gridLocation[0], identifier.gridLocation[1]);
                 BuildableItem buildableItem = gridItemsOnProperty.FirstOrDefault<BuildableItem>((BuildableItem b) =>
